@@ -1,0 +1,10 @@
+language: erlang
+script: "make"
+otp_release:
+  - R16B03-1
+branches:
+  only:
+    - master
+notifications:
+  email:
+    - d.klionsky@dev.powermemobile.com

@@ -1,0 +1,11 @@
+{application, alley_router, [
+    {description, "Router application from Power Alley Gateway Suite"},
+    {vsn, git},
+    {registered, []},
+    {applications, [
+        kernel,
+        stdlib
+    ]},
+    {mod, {alley_router_app, []}},
+    {env, []}
+]}.
