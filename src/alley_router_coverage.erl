@@ -2,7 +2,7 @@
 
 -include_lib("alley_dto/include/adto.hrl").
 
--define(TEST, 1).
+%-define(TEST, 1).
 -ifdef(TEST).
     -compile(export_all).
     -include_lib("eunit/include/eunit.hrl").
@@ -17,6 +17,9 @@
 -define(TON_INTERNATIONAL, 1).
 -define(TON_NATIONAL,      2).
 -define(TON_ALPHANUMERIC,  5).
+
+-define(NPI_UNKNOWN,       2#00000000).
+-define(NPI_ISDN,          2#00000001). % E163/E164
 
 -type provider_id() :: uuid_dto().
 
@@ -34,17 +37,20 @@ fill_coverage_tab(Networks, DefaultProviderId, Tab) ->
     ets:insert(Tab, {prefix_lens, PrefixLens}),
     Tab.
 
--spec which_network(#addr{}, ets:tid()) -> {binary(), binary(), binary()} | undefined.
+-spec which_network(#addr{}, ets:tid()) -> {binary(), #addr{}, binary()} | undefined.
 which_network(#addr{ton = Ton} = Addr, Tab) ->
     StripZero = alley_router_conf:get(strip_leading_zero),
     CountryCode = alley_router_conf:get(country_code),
     [{prefix_lens, PrefixLens}] = ets:lookup(Tab, prefix_lens),
     AddrInt = to_international(Addr, StripZero, CountryCode),
-    ProperDigits = AddrInt#addr.addr,
-    case try_match_network(ProperDigits, prefixes(ProperDigits, PrefixLens), Tab) of
+    case try_match_network(AddrInt, prefixes(AddrInt, PrefixLens), Tab) of
         undefined when Ton =:= ?TON_UNKNOWN ->
-            GuessDigits = <<CountryCode/binary, ProperDigits/binary>>,
-            try_match_network(GuessDigits, prefixes(GuessDigits, PrefixLens), Tab);
+            AddrInt2 = #addr{
+                addr = <<CountryCode/binary, (AddrInt#addr.addr)/binary>>,
+                ton = ?TON_INTERNATIONAL,
+                npi = ?NPI_ISDN
+            },
+            try_match_network(AddrInt2, prefixes(AddrInt2, PrefixLens), Tab);
         Other ->
             Other
     end.
@@ -53,7 +59,7 @@ which_network(#addr{ton = Ton} = Addr, Tab) ->
 %% private functions
 %% -------------------------------------------------------------------------
 
-prefixes(Digits, PrefixLens) ->
+prefixes(#addr{addr = Digits}, PrefixLens) ->
     [binary:part(Digits, {0, L}) || L <- PrefixLens, L < size(Digits)].
 
 flatten_networks(Networks, DefaultProviderId) ->
@@ -76,28 +82,48 @@ make_coverage_tuple(Network, DefaultProviderId) ->
     [{<<CountryCode/binary, Prefix/binary>>, NumberLen, NetworkId, DefaultProviderId} || Prefix <- Prefixes].
 
 to_international(Addr = #addr{addr = <<"+", Rest/binary>>}, _StripZero, _CountryCode) ->
-    Addr#addr{addr = strip_non_digits(Rest)};
+    Addr#addr{
+        addr = strip_non_digits(Rest),
+        ton = ?TON_INTERNATIONAL,
+        npi = ?NPI_ISDN
+    };
 to_international(Addr = #addr{addr = <<"00", Rest/binary>>}, _StripZero, _CountryCode) ->
-    Addr#addr{addr = strip_non_digits(Rest)};
+    Addr#addr{
+        addr = strip_non_digits(Rest),
+        ton = ?TON_INTERNATIONAL,
+        npi = ?NPI_ISDN
+    };
 to_international(Addr = #addr{addr = <<"0", Rest/binary>>}, true, CountryCode) ->
-    Addr#addr{addr = <<CountryCode/binary, (strip_non_digits(Rest))/binary>>, ton = ?TON_INTERNATIONAL};
+    Addr#addr{
+        addr = <<CountryCode/binary, (strip_non_digits(Rest))/binary>>,
+        ton = ?TON_INTERNATIONAL,
+        npi = ?NPI_ISDN
+    };
 to_international(Addr = #addr{addr = Number, ton = ?TON_INTERNATIONAL}, _StripZero, _CountryCode) ->
-    Addr#addr{addr = strip_non_digits(Number)};
+    Addr#addr{
+        addr = strip_non_digits(Number),
+        ton = ?TON_INTERNATIONAL,
+        npi = ?NPI_ISDN
+    };
 to_international(Addr = #addr{addr = Number, ton = ?TON_NATIONAL}, _StripZero, CountryCode) ->
-    Addr#addr{addr = <<CountryCode/binary, (strip_non_digits(Number))/binary>>, ton = ?TON_INTERNATIONAL};
+    Addr#addr{
+        addr = <<CountryCode/binary, (strip_non_digits(Number))/binary>>,
+        ton = ?TON_INTERNATIONAL,
+        npi = ?NPI_ISDN
+    };
 to_international(Addr = #addr{addr = Number}, _StripZero, _CountryCode) ->
     Addr#addr{addr = strip_non_digits(Number)}.
 
 strip_non_digits(Number) ->
     << <<D>> || <<D>> <= Number, D >= $0, D =< $9>>.
 
-try_match_network(_Number, [], _Tab) ->
+try_match_network(_Addr, [], _Tab) ->
     undefined;
-try_match_network(Number, [Prefix | Prefixes], Tab) ->
+try_match_network(Addr = #addr{addr = Number}, [Prefix | Prefixes], Tab) ->
     case ets:lookup(Tab, Prefix) of
-        [{Prefix, NumLen, NetworkId, ProviderId}] when
-                NumLen =:= 0 orelse NumLen =:= size(Number) ->
-            {NetworkId, Number, ProviderId};
+        [{Prefix, NumberLen, NetworkId, ProviderId}] when
+                NumberLen =:= 0 orelse NumberLen =:= size(Number) ->
+            {NetworkId, Addr, ProviderId};
         _ ->
             try_match_network(Number, Prefixes, Tab)
     end.
@@ -154,21 +180,23 @@ fill_coverage_tab_def_def_prov_id_test() ->
 
 which_network_international_number_success_test() ->
     Tab = fill_coverage(undefined),
-    Addr = #addr{addr = <<"999010000000">>, ton = ?TON_INTERNATIONAL},
-    Expected = {<<"NID1">>, <<"999010000000">>, <<"PID1">>},
+    Addr = #addr{addr = <<"999010000000">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
+    Addr2 = #addr{addr = <<"999010000000">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
+    Expected = {<<"NID1">>, Addr2, <<"PID1">>},
     Actual = which_network(Addr, Tab),
     ?assertEqual(Expected, Actual).
 
-which_network_short_number_success_test() ->
+which_network_with_zero_number_len_success_test() ->
     Tab = fill_coverage(undefined),
-    Addr = #addr{addr = <<"998010">>, ton = ?TON_UNKNOWN},
-    Expected = {<<"NID2">>, <<"998010">>, <<"PID2">>},
+    Addr = #addr{addr = <<"9980100000">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
+    Addr2 = #addr{addr = <<"9980100000">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
+    Expected = {<<"NID2">>, Addr2, <<"PID2">>},
     Actual = which_network(Addr, Tab),
     ?assertEqual(Expected, Actual).
 
 which_network_failure_test() ->
     Tab = fill_coverage(undefined),
-    Addr = #addr{addr = <<"997010000000">>, ton = ?TON_INTERNATIONAL},
+    Addr = #addr{addr = <<"997010000000">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
     Expected = undefined,
     Actual = which_network(Addr, Tab),
     ?assertEqual(Expected, Actual).
@@ -177,7 +205,7 @@ to_international_1_test() ->
     Addr = #addr{addr = <<"+999111111111">>},
     StripZero = false,
     CountryCode = <<"999">>,
-    Exp = #addr{addr = <<"999111111111">>},
+    Exp = #addr{addr = <<"999111111111">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
     Act = to_international(Addr, StripZero, CountryCode),
     ?assertEqual(Exp, Act).
 
@@ -185,7 +213,7 @@ to_international_2_test() ->
     Addr = #addr{addr = <<"00999111111111">>},
     StripZero = false,
     CountryCode = <<"999">>,
-    Exp = #addr{addr = <<"999111111111">>},
+    Exp = #addr{addr = <<"999111111111">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
     Act = to_international(Addr, StripZero, CountryCode),
     ?assertEqual(Exp, Act).
 
@@ -193,15 +221,15 @@ to_international_3_test() ->
     Addr = #addr{addr = <<"0111111111">>},
     StripZero = true,
     CountryCode = <<"999">>,
-    Exp = #addr{addr = <<"999111111111">>, ton = ?TON_INTERNATIONAL},
+    Exp = #addr{addr = <<"999111111111">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
     Act = to_international(Addr, StripZero, CountryCode),
     ?assertEqual(Exp, Act).
 
 to_international_4_test() ->
-    Addr = #addr{addr = <<"999111111111">>},
+    Addr = #addr{addr = <<"999111111111">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
     StripZero = false,
     CountryCode = <<"999">>,
-    Exp = #addr{addr = <<"999111111111">>},
+    Exp = #addr{addr = <<"999111111111">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
     Act = to_international(Addr, StripZero, CountryCode),
     ?assertEqual(Exp, Act).
 
@@ -209,7 +237,7 @@ to_international_5_test() ->
     Addr = #addr{addr = <<"111111111">>, ton = ?TON_NATIONAL},
     StripZero = false,
     CountryCode = <<"999">>,
-    Exp = #addr{addr = <<"999111111111">>, ton = ?TON_INTERNATIONAL},
+    Exp = #addr{addr = <<"999111111111">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
     Act = to_international(Addr, StripZero, CountryCode),
     ?assertEqual(Exp, Act).
 
