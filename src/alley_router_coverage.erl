@@ -39,29 +39,25 @@ fill_coverage_tab(Networks, DefaultProviderId, Tab) ->
     Tab.
 
 -spec which_network(#addr{}, ets:tid()) -> {binary(), #addr{}, binary()} | undefined.
-which_network(#addr{ton = Ton} = Addr, Tab) ->
+which_network(Addr = #addr{}, Tab) ->
     StripZero = alley_router_conf:get(strip_leading_zero),
     CountryCode = alley_router_conf:get(country_code),
     [{prefix_lens, PrefixLens}] = ets:lookup(Tab, prefix_lens),
     AddrInt = to_international(Addr, StripZero, CountryCode),
-    case try_match_network(AddrInt, prefixes(AddrInt, PrefixLens), Tab) of
-        undefined when Ton =:= ?TON_UNKNOWN ->
-            AddrInt2 = #addr{
-                addr = <<CountryCode/binary, (AddrInt#addr.addr)/binary>>,
-                ton = ?TON_INTERNATIONAL,
-                npi = ?NPI_ISDN
-            },
-            try_match_network(AddrInt2, prefixes(AddrInt2, PrefixLens), Tab);
-        Other ->
-            Other
+    Number = AddrInt#addr.addr,
+    case try_match_network(Number, prefixes(Number, PrefixLens), Tab) of
+        undefined ->
+            undefined;
+        {NetworkId, ProviderId} ->
+            {NetworkId, AddrInt, ProviderId}
     end.
 
 %% -------------------------------------------------------------------------
 %% private functions
 %% -------------------------------------------------------------------------
 
-prefixes(#addr{addr = Digits}, PrefixLens) ->
-    [binary:part(Digits, {0, L}) || L <- PrefixLens, L < size(Digits)].
+prefixes(Number, PrefixLens) ->
+    [binary:part(Number, {0, L}) || L <- PrefixLens, L < size(Number)].
 
 flatten_networks(Networks, DefaultProviderId) ->
     lists:flatmap(fun(Network) ->
@@ -118,13 +114,13 @@ to_international(Addr = #addr{addr = Number}, _StripZero, _CountryCode) ->
 strip_non_digits(Number) ->
     << <<D>> || <<D>> <= Number, D >= $0, D =< $9>>.
 
-try_match_network(_Addr, [], _Tab) ->
+try_match_network(_Number, [], _Tab) ->
     undefined;
-try_match_network(Addr = #addr{addr = Number}, [Prefix | Prefixes], Tab) ->
+try_match_network(Number, [Prefix | Prefixes], Tab) ->
     case ets:lookup(Tab, Prefix) of
         [{Prefix, NumberLen, NetworkId, ProviderId}] when
                 NumberLen =:= 0 orelse NumberLen =:= size(Number) ->
-            {NetworkId, Addr, ProviderId};
+            {NetworkId, ProviderId};
         _ ->
             try_match_network(Number, Prefixes, Tab)
     end.
@@ -181,16 +177,16 @@ fill_coverage_tab_def_def_prov_id_test() ->
 
 which_network_international_number_success_test() ->
     Tab = fill_coverage(undefined),
-    Addr = #addr{addr = <<"999010000000">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
-    Addr2 = #addr{addr = <<"999010000000">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
+    Addr = #addr{addr = <<"999020000000">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
+    Addr2 = #addr{addr = <<"999020000000">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
     Expected = {<<"NID1">>, Addr2, <<"PID1">>},
     Actual = which_network(Addr, Tab),
     ?assertEqual(Expected, Actual).
 
 which_network_with_zero_number_len_success_test() ->
     Tab = fill_coverage(undefined),
-    Addr = #addr{addr = <<"9980100000">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
-    Addr2 = #addr{addr = <<"9980100000">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
+    Addr = #addr{addr = <<"9980200000">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
+    Addr2 = #addr{addr = <<"9980200000">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
     Expected = {<<"NID2">>, Addr2, <<"PID2">>},
     Actual = which_network(Addr, Tab),
     ?assertEqual(Expected, Actual).
