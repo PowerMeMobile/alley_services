@@ -17,9 +17,10 @@
 -define(TON_INTERNATIONAL, 1).
 -define(TON_NATIONAL,      2).
 -define(TON_ALPHANUMERIC,  5).
+-define(TON_ABBREVIATED,   6).
 
--define(NPI_UNKNOWN,       2#00000000).
--define(NPI_ISDN,          2#00000001). % E163/E164
+-define(NPI_UNKNOWN,       0).
+-define(NPI_ISDN,          1). % E163/E164
 
 -type provider_id() :: uuid_dto().
 
