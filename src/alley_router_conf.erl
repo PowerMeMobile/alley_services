@@ -11,6 +11,7 @@
 %% API
 %% ===================================================================
 
+-spec get(atom()) -> term().
 get(Key) ->
     default(Key).
 
@@ -19,4 +20,5 @@ get(Key) ->
 %% ===================================================================
 
 default(strip_leading_zero)    -> false;
-default(country_code)          -> "999".
+default(country_code)          -> <<"999">>;
+default(bulk_threshold)        -> 100.
