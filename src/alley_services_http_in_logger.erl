@@ -266,5 +266,5 @@ fmt_apache_log(LD = #log{}) ->
     {UserAgent, Req} = cowboy_req:header(<<"user-agent">>, Req, "-"),
 
     %% final apache like log line
-    io_lib:format("~s - - [~s] \"~s\" ~p ~p ~p ~p~n",
+    io_lib:format("~s - - [~s] \"~s\" ~p ~p ~p ~s~n",
         [ClientIP, LogTime, ReqLine, LD#log.resp_code, RespSize, "-", UserAgent]).
