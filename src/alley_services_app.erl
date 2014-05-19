@@ -1,4 +1,4 @@
--module(alley_router_app).
+-module(alley_services_app).
 
 -behaviour(application).
 
@@ -16,7 +16,7 @@
 
 start(_StartType, _StartArgs) ->
     register(?MODULE, self()),
-    alley_router_sup:start_link().
+    alley_services_sup:start_link().
 
 stop(_State = #state{}) ->
     ok.

@@ -1,4 +1,4 @@
--module(alley_router_sup).
+-module(alley_services_sup).
 
 -behaviour(supervisor).
 

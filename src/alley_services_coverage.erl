@@ -1,4 +1,4 @@
--module(alley_router_coverage).
+-module(alley_services_coverage).
 
 -include_lib("alley_dto/include/adto.hrl").
 
@@ -40,8 +40,8 @@ fill_coverage_tab(Networks, DefaultProviderId, Tab) ->
 
 -spec which_network(#addr{}, ets:tid()) -> {binary(), #addr{}, binary()} | undefined.
 which_network(Addr = #addr{}, Tab) ->
-    StripZero = alley_router_conf:get(strip_leading_zero),
-    CountryCode = alley_router_conf:get(country_code),
+    StripZero = alley_services_conf:get(strip_leading_zero),
+    CountryCode = alley_services_conf:get(country_code),
     [{prefix_lens, PrefixLens}] = ets:lookup(Tab, prefix_lens),
     AddrInt = to_international(Addr, StripZero, CountryCode),
     Number = AddrInt#addr.addr,

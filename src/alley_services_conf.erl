@@ -1,4 +1,4 @@
--module(alley_router_conf).
+-module(alley_services_conf).
 
 -compile({no_auto_import, [get/1]}).
 
