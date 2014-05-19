@@ -10,7 +10,9 @@
 
 -export([
     fill_coverage_tab/3,
-    which_network/2
+    which_network/2,
+    route_addrs_to_providers/2,
+    route_addrs_to_gateways/2
 ]).
 
 -define(TON_UNKNOWN,       0).
@@ -23,6 +25,7 @@
 -define(NPI_ISDN,          1). % E163/E164
 
 -type provider_id() :: uuid_dto().
+-type gateway_id()  :: uuid_dto().
 
 %% ===================================================================
 %% API
@@ -52,9 +55,19 @@ which_network(Addr = #addr{}, Tab) ->
             {NetworkId, AddrInt, ProviderId}
     end.
 
-%% -------------------------------------------------------------------------
-%% private functions
-%% -------------------------------------------------------------------------
+-spec route_addrs_to_providers([#addr{}], ets:tab()) ->
+    {[{provider_id(), [#addr{}]}], [#addr{}]}.
+route_addrs_to_providers(Addrs, CoverageTab) ->
+    route_addrs_to_providers(Addrs, CoverageTab, dict:new(), []).
+
+-spec route_addrs_to_gateways([{provider_id(), [#addr{}]}], [#provider_dto{}]) ->
+    {[{gateway_id(), [#addr{}]}], [#addr{}]}.
+route_addrs_to_gateways(ProvIdAddrs, Providers) ->
+    route_addrs_to_gateways(ProvIdAddrs, Providers, [], []).
+
+%% ===================================================================
+%% Internal
+%% ===================================================================
 
 prefixes(Number, PrefixLens) ->
     [binary:part(Number, {0, L}) || L <- PrefixLens, L < size(Number)].
@@ -123,6 +136,44 @@ try_match_network(Number, [Prefix | Prefixes], Tab) ->
             {NetworkId, ProviderId};
         _ ->
             try_match_network(Number, Prefixes, Tab)
+    end.
+
+route_addrs_to_providers([], _CoverageTab, Routable, Unroutable) ->
+    {dict:to_list(Routable), Unroutable};
+route_addrs_to_providers([Addr | Rest], CoverageTab, Routable, Unroutable) ->
+    case alley_services_coverage:which_network(Addr, CoverageTab) of
+        {_NetworkId, MaybeFixedAddr, ProviderId} ->
+            Routable2 = dict:append(ProviderId, MaybeFixedAddr, Routable),
+            route_addrs_to_providers(Rest, CoverageTab, Routable2, Unroutable);
+        undefined ->
+            route_addrs_to_providers(Rest, CoverageTab, Routable, [Addr | Unroutable])
+    end.
+
+route_addrs_to_gateways([], _Providers, Routable, Unroutable) ->
+    {Routable, Unroutable};
+route_addrs_to_gateways([{ProvId, Addrs} | Rest], Providers, Routable, Unroutable) ->
+    case lists:keyfind(ProvId, #provider_dto.id, Providers) of
+        false ->
+            %% the configuration issue. nowhere to route.
+            route_addrs_to_gateways(Rest, Providers, Routable, Addrs ++ Unroutable);
+        Provider ->
+            UseBulkGtw = length(Addrs) >= alley_services_conf:get(bulk_threshold),
+            %% try to workaround possible configuration issues.
+            case {Provider#provider_dto.gateway_id, Provider#provider_dto.bulk_gateway_id, UseBulkGtw} of
+                {undefined, undefined, _} ->
+                    %% the configuration issue. nowhere to route.
+                    route_addrs_to_gateways(Rest, Providers, Routable, Addrs ++ Unroutable);
+                {GtwId, undefined, _} ->
+                    %% route all via regular gateway.
+                    route_addrs_to_gateways(Rest, Providers, [{GtwId, Addrs} | Routable], Unroutable);
+                {undefined, BulkGtwId, _} ->
+                    %% route all via bulk gateway.
+                    route_addrs_to_gateways(Rest, Providers, [{BulkGtwId, Addrs} | Routable], Unroutable);
+                {GtwId, _BulkGtwId, false} ->
+                    route_addrs_to_gateways(Rest, Providers, [{GtwId, Addrs} | Routable], Unroutable);
+                {_GtwId, BulkGtwId, true} ->
+                    route_addrs_to_gateways(Rest, Providers, [{BulkGtwId, Addrs} | Routable], Unroutable)
+            end
     end.
 
 %% ===================================================================
