@@ -8,6 +8,7 @@
 -export([
     start_link/0,
     check/2,
+    filter/2,
     update/0
 ]).
 
@@ -43,6 +44,10 @@ start_link() ->
 -spec check(addr(), addr()) -> allowed | denied.
 check(DstAddr, SrcAddr) ->
     check(DstAddr, SrcAddr, ?MODULE).
+
+-spec filter([addr()], addr()) -> {[addr()], [addr()]}.
+filter(DstAddrs, SrcAddr) ->
+    filter(DstAddrs, SrcAddr, [], []).
 
 -spec update() -> ok.
 update() ->
@@ -138,3 +143,13 @@ check(DstAddr, SrcAddr, Tab) ->
                     allowed
             end
     end.
+
+filter([DstAddr | DstAddrs], SrcAddr, Allowed, Denied) ->
+    case check(DstAddr, SrcAddr) of
+        allowed ->
+            filter(DstAddrs, SrcAddr, [DstAddr | Allowed], Denied);
+        denied ->
+            filter(DstAddrs, SrcAddr, Allowed, [DstAddr | Denied])
+    end;
+filter([], _SrcAddr, Allowed, Denied) ->
+    {Allowed, Denied}.
