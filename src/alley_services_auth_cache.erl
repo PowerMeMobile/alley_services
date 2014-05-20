@@ -9,6 +9,7 @@
     start_link/0,
     store/3,
     fetch/2,
+    delete/1,
     delete/2
 ]).
 
@@ -46,10 +47,13 @@ fetch(CustomerId, UserId) ->
     Key = {CustomerId, UserId},
     gen_server:call(?MODULE, {fetch, Key}).
 
--spec delete(binary(), binary()) -> ok.
+-spec delete(binary()) -> ok.
+delete(CustomerId) ->
+    delete(CustomerId, '_').
+
+-spec delete(binary(), binary() | '_') -> ok.
 delete(CustomerId, UserId) ->
-    Key = {CustomerId, UserId},
-    gen_server:call(?MODULE, {delete, Key}).
+    gen_server:call(?MODULE, {delete, {{CustomerId, UserId}, '_'}}).
 
 %% ===================================================================
 %% gen_server callbacks
@@ -76,8 +80,8 @@ handle_call({fetch, Key}, _From, St) ->
             {reply, {ok, Value}, St}
     end;
 
-handle_call({delete, Key}, _From, St) ->
-    ok = dets:delete(?MODULE, Key),
+handle_call({delete, Pattern}, _From, St) ->
+    ok = dets:match_delete(?MODULE, Pattern),
     ok = dets:sync(?MODULE),
     {reply, ok, St};
 
