@@ -14,6 +14,11 @@
     delete/3
 ]).
 
+%% Service API
+-export([
+    fetch_all/0
+]).
+
 %% gen_server exports
 -export([
     init/1,
@@ -50,7 +55,12 @@ store(CustomerId, UserId, Type, AuthResp) ->
     {ok, record()} | not_found.
 fetch(CustomerId, UserId, Type) ->
     Key = {CustomerId, UserId, Type},
-    gen_server:call(?MODULE, {fetch, Key}).
+    case dets:lookup(?MODULE, Key) of
+        [] ->
+            not_found;
+        [{Key, Value}] ->
+            {ok, Value}
+    end.
 
 -spec delete(customer_id()) -> ok.
 delete(CustomerId) ->
@@ -63,6 +73,14 @@ delete(CustomerId, UserId) ->
 -spec delete(customer_id(), user_id() | '_', type() | '_') -> ok.
 delete(CustomerId, UserId, Type) ->
     gen_server:call(?MODULE, {delete, {{CustomerId, UserId, Type}, '_'}}).
+
+%% ===================================================================
+%% Service API
+%% ===================================================================
+
+-spec fetch_all() -> [{{customer_id(), user_id(), type()}, record()}].
+fetch_all() ->
+    dets:foldl(fun(I, Acc) -> [I | Acc] end, [], ?MODULE).
 
 %% ===================================================================
 %% gen_server callbacks
@@ -80,14 +98,6 @@ handle_call({store, Key, Value}, _From, St) ->
     ok = dets:insert(?MODULE, {Key, Value}),
     ok = dets:sync(?MODULE),
     {reply, ok, St};
-
-handle_call({fetch, Key}, _From, St) ->
-    case dets:lookup(?MODULE, Key) of
-        [] ->
-            {reply, not_found, St};
-        [{Key, Value}] ->
-            {reply, {ok, Value}, St}
-    end;
 
 handle_call({delete, Pattern}, _From, St) ->
     ok = dets:match_delete(?MODULE, Pattern),
