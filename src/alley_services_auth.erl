@@ -21,32 +21,32 @@ start_link() ->
     {ok, QueueName} = application:get_env(?APP, kelly_auth_queue),
     rmql_rpc_client:start_link(?MODULE, QueueName).
 
--spec authenticate(binary(), binary(), binary(), atom()) ->
+-spec authenticate(binary(), binary(), atom(), binary()) ->
     {ok, #k1api_auth_response_dto{}} |
     {error, timeout}.
-authenticate(CustomerId, UserId, Password, ConnType) ->
-    authenticate(check_cache, CustomerId, UserId, Password, ConnType).
+authenticate(CustomerId, UserId, Type, Password) ->
+    authenticate(check_cache, CustomerId, UserId, Type, Password).
 
 %% ===================================================================
 %% Internal
 %% ===================================================================
 
-authenticate(check_cache, CustomerId, UserId, Password, ConnType) ->
-    case alley_services_auth_cache:fetch(CustomerId, UserId) of
+authenticate(check_cache, CustomerId, UserId, Type, Password) ->
+    case alley_services_auth_cache:fetch(CustomerId, UserId, Type) of
         {ok, AuthResp} ->
             {ok, AuthResp};
         not_found ->
-            authenticate(request_backend, CustomerId, UserId, Password, ConnType)
+            authenticate(request_backend, CustomerId, UserId, Type, Password)
     end;
 
-authenticate(request_backend, CustomerId, UserId, Password, ConnType) ->
+authenticate(request_backend, CustomerId, UserId, Type, Password) ->
     ReqId = uuid:unparse(uuid:generate_time()),
     AuthReq = #k1api_auth_request_dto{
         id = ReqId,
         customer_id = CustomerId,
         user_id = UserId,
         password = Password,
-        connection_type = ConnType
+        connection_type = Type
     },
     ?log_debug("Sending auth request: ~p", [AuthReq]),
     {ok, Payload} = adto:encode(AuthReq),
@@ -57,7 +57,7 @@ authenticate(request_backend, CustomerId, UserId, Password, ConnType) ->
                     ?log_debug("Got auth response: ~p", [AuthResp]),
                     case Result of
                         {customer, _} ->
-                            ok = alley_services_auth_cache:store(CustomerId, UserId, AuthResp);
+                            ok = alley_services_auth_cache:store(CustomerId, UserId, Type, AuthResp);
                         {error, _} ->
                             ok
                     end,

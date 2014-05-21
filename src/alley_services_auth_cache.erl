@@ -7,10 +7,11 @@
 %% API exports
 -export([
     start_link/0,
-    store/3,
-    fetch/2,
+    store/4,
+    fetch/3,
     delete/1,
-    delete/2
+    delete/2,
+    delete/3
 ]).
 
 %% gen_server exports
@@ -36,15 +37,15 @@
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
--spec store(binary(), binary(), record()) -> ok.
-store(CustomerId, UserId, AuthResp) ->
-    Key = {CustomerId, UserId},
+-spec store(binary(), binary(), atom(), record()) -> ok.
+store(CustomerId, UserId, Type, AuthResp) ->
+    Key = {CustomerId, UserId, Type},
     gen_server:call(?MODULE, {store, Key, AuthResp}).
 
--spec fetch(binary(), binary()) ->
+-spec fetch(binary(), binary(), atom()) ->
     {ok, record()} | not_found.
-fetch(CustomerId, UserId) ->
-    Key = {CustomerId, UserId},
+fetch(CustomerId, UserId, Type) ->
+    Key = {CustomerId, UserId, Type},
     gen_server:call(?MODULE, {fetch, Key}).
 
 -spec delete(binary()) -> ok.
@@ -53,7 +54,11 @@ delete(CustomerId) ->
 
 -spec delete(binary(), binary() | '_') -> ok.
 delete(CustomerId, UserId) ->
-    gen_server:call(?MODULE, {delete, {{CustomerId, UserId}, '_'}}).
+    delete(CustomerId, UserId, '_').
+
+-spec delete(binary(), binary() | '_', atom() | '_') -> ok.
+delete(CustomerId, UserId, Type) ->
+    gen_server:call(?MODULE, {delete, {{CustomerId, UserId, Type}, '_'}}).
 
 %% ===================================================================
 %% gen_server callbacks
