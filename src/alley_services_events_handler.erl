@@ -16,7 +16,7 @@ handle_event(<<"text/plain">>, <<"BlacklistChanged">>) ->
     alley_services_blacklist:update();
 handle_event(<<"text/plain">>, <<"CustomerChanged:", EventInfo/binary>>) ->
     [CustomerUuid, CustomerId] = binary:split(EventInfo, <<":">>),
-    ?log_info("Got CustomerChanged event: CustomerUuuid:~p CustomerId:~p",
+    ?log_info("Got CustomerChanged event: CustomerUuid:~p CustomerId:~p",
         [CustomerUuid, CustomerId]),
     alley_services_auth_cache:delete(CustomerId);
 handle_event(ContentType, Payload) ->
