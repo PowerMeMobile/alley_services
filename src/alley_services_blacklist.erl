@@ -61,14 +61,13 @@ init([]) ->
     process_flag(trap_exit, true),
     case ets:file2tab(?BLACKLIST_FILE, [{verify, true}]) of
         {ok, ?MODULE} ->
-            ?log_info("Blacklist: started", []),
-            {ok, #st{}};
+            nop;
         {error, _Whatever} ->
-            ?MODULE = ets:new(?MODULE, [bag, named_table, {read_concurrency, true}]),
-            TimerRef = erlang:start_timer(0, self(), fill_blacklist),
-            ?log_info("Blacklist: started", []),
-            {ok, #st{timer_ref = TimerRef}}
-    end.
+            ?MODULE = ets:new(?MODULE, [bag, named_table, {read_concurrency, true}])
+    end,
+    TimerRef = erlang:start_timer(0, self(), fill_blacklist),
+    ?log_info("Blacklist: started", []),
+    {ok, #st{timer_ref = TimerRef}}.
 
 handle_call(update, _From, St = #st{timer_ref = undefined}) ->
     %% force update and return result.
