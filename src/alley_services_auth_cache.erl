@@ -27,6 +27,10 @@
 -include_lib("alley_common/include/logging.hrl").
 -include_lib("alley_common/include/gen_server_spec.hrl").
 
+-type customer_id() :: string() | binary().
+-type user_id()     :: string() | binary().
+-type type()        :: atom().
+
 -record(st, {}).
 
 %% ===================================================================
@@ -37,26 +41,26 @@
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
--spec store(binary(), binary(), atom(), record()) -> ok.
+-spec store(customer_id(), user_id(), type(), record()) -> ok.
 store(CustomerId, UserId, Type, AuthResp) ->
     Key = {CustomerId, UserId, Type},
     gen_server:call(?MODULE, {store, Key, AuthResp}).
 
--spec fetch(binary(), binary(), atom()) ->
+-spec fetch(customer_id(), user_id(), type()) ->
     {ok, record()} | not_found.
 fetch(CustomerId, UserId, Type) ->
     Key = {CustomerId, UserId, Type},
     gen_server:call(?MODULE, {fetch, Key}).
 
--spec delete(binary()) -> ok.
+-spec delete(customer_id()) -> ok.
 delete(CustomerId) ->
     delete(CustomerId, '_').
 
--spec delete(binary(), binary() | '_') -> ok.
+-spec delete(customer_id(), user_id() | '_') -> ok.
 delete(CustomerId, UserId) ->
     delete(CustomerId, UserId, '_').
 
--spec delete(binary(), binary() | '_', atom() | '_') -> ok.
+-spec delete(customer_id(), user_id() | '_', type() | '_') -> ok.
 delete(CustomerId, UserId, Type) ->
     gen_server:call(?MODULE, {delete, {{CustomerId, UserId, Type}, '_'}}).
 
