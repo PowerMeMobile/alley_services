@@ -31,5 +31,8 @@ init([]) ->
         ?CHILD(alley_services_auth, 5000, worker),
         ?CHILD(alley_services_api, 5000, worker),
         ?CHILD(alley_services_blacklist, 5000, worker),
-        ?CHILD(alley_services_events, 5000, worker)
+        ?CHILD(alley_services_events, 5000, worker),
+        ?CHILD(alley_services_defer, 5000, worker),
+        ?CHILD(alley_services_mo, 5000, worker),
+        ?CHILD(alley_services_mt, 5000, worker)
     ]}}.
