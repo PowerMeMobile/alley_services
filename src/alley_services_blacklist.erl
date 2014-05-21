@@ -12,6 +12,11 @@
     update/0
 ]).
 
+%% Service API
+-export([
+    fetch_all/0
+]).
+
 %% gen_server callbacks
 -export([
     init/1,
@@ -52,6 +57,14 @@ filter(DstAddrs, SrcAddr) ->
 -spec update() -> ok.
 update() ->
     gen_server:call(?MODULE, update).
+
+%% ===================================================================
+%% Service API
+%% ===================================================================
+
+-spec fetch_all() -> [{addr(), addr() | undefined}].
+fetch_all() ->
+    ets:tab2list(?MODULE).
 
 %% ===================================================================
 %% gen_server callbacks
