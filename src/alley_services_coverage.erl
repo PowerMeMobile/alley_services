@@ -12,7 +12,9 @@
     fill_coverage_tab/3,
     which_network/2,
     route_addrs_to_providers/2,
-    route_addrs_to_gateways/2
+    route_addrs_to_gateways/2,
+    route_addrs_to_networks/2,
+    build_network_to_sms_cost_map/3
 ]).
 
 -define(TON_UNKNOWN,       0).
@@ -26,6 +28,7 @@
 
 -type provider_id() :: uuid_dto().
 -type gateway_id()  :: uuid_dto().
+-type network_id()  :: uuid_dto().
 
 %% ===================================================================
 %% API
@@ -64,6 +67,16 @@ route_addrs_to_providers(Addrs, CoverageTab) ->
     {[{gateway_id(), [#addr{}]}], [#addr{}]}.
 route_addrs_to_gateways(ProvIdAddrs, Providers) ->
     route_addrs_to_gateways(ProvIdAddrs, Providers, [], []).
+
+-spec route_addrs_to_networks([#addr{}], ets:tab()) ->
+    {[{network_id(), [#addr{}]}], [#addr{}]}.
+route_addrs_to_networks(Addrs, CoverageTab) ->
+    route_addrs_to_networks(Addrs, CoverageTab, dict:new(), []).
+
+-spec build_network_to_sms_cost_map([#network_dto{}], [#provider_dto{}], provider_id()) ->
+    [{network_id(), float()}].
+build_network_to_sms_cost_map(Networks, Providers, DefaultProviderId) ->
+    network_id_to_sms_cost(Networks, Providers, DefaultProviderId).
 
 %% ===================================================================
 %% Internal
@@ -175,6 +188,40 @@ route_addrs_to_gateways([{ProvId, Addrs} | Rest], Providers, Routable, Unroutabl
                     route_addrs_to_gateways(Rest, Providers, [{BulkGtwId, Addrs} | Routable], Unroutable)
             end
     end.
+
+route_addrs_to_networks([], _CoverageTab, Routable, Unroutable) ->
+    {dict:to_list(Routable), Unroutable};
+route_addrs_to_networks([Addr | Rest], CoverageTab, Routable, Unroutable) ->
+    case alley_services_coverage:which_network(Addr, CoverageTab) of
+        {NetworkId, _MaybeFixedAddr, _ProviderId} ->
+            Routable2 = dict:append(NetworkId, Addr, Routable),
+            route_addrs_to_networks(Rest, CoverageTab, Routable2, Unroutable);
+        undefined ->
+            route_addrs_to_networks(Rest, CoverageTab, Routable, [Addr | Unroutable])
+    end.
+
+network_id_to_sms_cost(Networks, Providers, DefaultProviderId) ->
+    {Networks2, Providers2} =
+        case DefaultProviderId of
+            undefined ->
+                {Networks, Providers};
+            DefaultProviderId ->
+                {[N#network_dto{provider_id = DefaultProviderId} || N <- Networks],
+                 [P || P <- Providers, P#provider_dto.id =:= DefaultProviderId]}
+        end,
+    network_id_to_sms_cost(Networks2, Providers2).
+
+network_id_to_sms_cost(Networks, Providers) ->
+    ProviderId2SmsAddPoints =
+        [{P#provider_dto.id, P#provider_dto.sms_add_points} || P <- Providers],
+    [{N#network_dto.id, calc_sms_cost(N, ProviderId2SmsAddPoints)} || N <- Networks].
+
+calc_sms_cost(Network, ProviderId2SmsAddPoints) ->
+    SmsPoints = Network#network_dto.sms_points,
+    SmsMultPoints = Network#network_dto.sms_mult_points,
+    ProviderId = Network#network_dto.provider_id,
+    SmsAddPoints = proplists:get_value(ProviderId, ProviderId2SmsAddPoints),
+    (SmsPoints + SmsAddPoints) * SmsMultPoints.
 
 %% ===================================================================
 %% Begin Tests
