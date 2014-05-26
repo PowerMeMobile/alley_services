@@ -1,7 +1,8 @@
 -module(alley_services_utils).
 
 -export([
-    addr_to_dto/1
+    addr_to_dto/1,
+    get_message_parts/2
 ]).
 
 -include_lib("alley_dto/include/adto.hrl").
@@ -16,7 +17,7 @@
 -define(NPI_ISDN,          1). % E163/E164
 
 %% ===================================================================
-%% Addr to dto
+%% API
 %% ===================================================================
 
 -spec addr_to_dto(Addr::binary()) -> #addr{}.
@@ -48,3 +49,19 @@ addr_to_dto(Addr, false, _Length) ->
         ton = ?TON_ALPHANUMERIC,
         npi = ?NPI_UNKNOWN
     }.
+
+-spec get_message_parts(pos_integer(), default | ucs) -> pos_integer().
+get_message_parts(Size, default) when Size =< 160 ->
+    1;
+get_message_parts(Size, default) ->
+    case (Size rem 153) == 0 of
+        true ->  trunc(Size/153);
+        false -> trunc(Size/153) + 1
+    end;
+get_message_parts(Size, ucs2) when Size =< 70 ->
+    1;
+get_message_parts(Size, ucs2) ->
+    case (Size rem 67) == 0 of
+        true ->  trunc(Size/67);
+        false -> trunc(Size/67) + 1
+    end.

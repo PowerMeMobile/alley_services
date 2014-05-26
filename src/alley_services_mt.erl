@@ -435,7 +435,7 @@ build_req_dto(ReqId, GatewayId, DestAddrs, Req) ->
     Encoded    = Req#send_req.encoded,
     NumberOfSymbols = size(Encoded),
     NumberOfDests = length(DestAddrs),
-    {ok, NumberOfParts} = get_message_parts(NumberOfSymbols, Encoding),
+    NumberOfParts = alley_services_utils:get_message_parts(NumberOfSymbols, Encoding),
     MessageIds = get_ids(CustomerId, UserId, NumberOfDests, NumberOfParts),
 
     #just_sms_request_dto{
@@ -465,21 +465,6 @@ get_ids(CustomerId, UserId, NumberOfDests, Parts) ->
                   {Acc, [integer_to_list(Id) | Group]}
           end, {[], []}, Ids),
     DTOIds.
-
-get_message_parts(Size, default) when Size =< 160 ->
-    {ok, 1};
-get_message_parts(Size, default) ->
-    case (Size rem 153) == 0 of
-        true -> {ok, trunc(Size/153)};
-        false -> {ok, trunc(Size/153) + 1}
-    end;
-get_message_parts(Size, ucs2) when Size =< 70 ->
-    {ok, 1};
-get_message_parts(Size, ucs2) ->
-    case (Size rem 67) == 0 of
-        true -> {ok, trunc(Size/67)};
-        false -> {ok, trunc(Size/67) + 1}
-    end.
 
 fmt_validity(SecondsTotal) ->
     MinutesTotal = SecondsTotal div 60,
