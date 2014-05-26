@@ -322,39 +322,30 @@ send(define_smpp_params, Req) ->
     send(check_billing, Req#send_req{smpp_params = Params});
 
 send(check_billing, Req) ->
-    Customer = Req#send_req.customer,
-
-    CoverageTab = Req#send_req.coverage_tab,
-    GtwId2Addrs = Req#send_req.routable,
-    DestAddrs = lists:flatten([Addr || {_GtwId, Addr} <- GtwId2Addrs]),
-    {NetworkId2Addrs, []} =
-        alley_services_coverage:route_addrs_to_networks(DestAddrs, CoverageTab),
-
-    Networks = Customer#k1api_auth_response_customer_dto.networks,
-    Providers = Customer#k1api_auth_response_customer_dto.providers,
-    DefaultProviderId = Customer#k1api_auth_response_customer_dto.default_provider_id,
-    NetworkId2SmsPrice = alley_services_coverage:build_network_to_sms_price_map(
-        Networks, Providers, DefaultProviderId),
-
-    Encoding = Req#send_req.encoding,
-    Encoded = Req#send_req.encoded,
-    NumberOfSymbols = size(Encoded),
-    NumberOfParts = alley_services_utils:calc_parts_number(NumberOfSymbols, Encoding),
-
-    Price = alley_services_coverage:calc_sending_price(
-        NetworkId2Addrs, NetworkId2SmsPrice, NumberOfParts),
+    Price = calc_sending_price(Req),
     ?log_debug("Sending price: ~p", [Price]),
+
+    CustomerId = Req#send_req.customer_id,
+    Customer = Req#send_req.customer,
 
     PayType = Customer#k1api_auth_response_customer_dto.pay_type,
     case PayType of
         postpaid ->
-            ?log_debug("Postpaid customer: check credit info", []),
-            nop;
+            ?log_debug("Postpaid customer: request credit", []),
+            case alley_services_api:request_credit(CustomerId, Price) of
+                {allowed, CreditLeft} ->
+                    ?log_debug("Sending allowed. Credit left: ~p", [CreditLeft]),
+                    send(build_req_dto_s, Req);
+                {denied, CreditLeft} ->
+                    ?log_debug("Sending denied. Credit left: ~p", [CreditLeft]),
+                    {ok, [{result, ?postpaidCreditLimitExceeded}]};
+                {error, timeout} ->
+                    {ok, [{result, ?serverUnreachable}]}
+            end;
         prepaid ->
-            ?log_debug("Prepaid customer: check billing info", []),
-            nop
-    end,
-    send(build_req_dto_s, Req);
+            ?log_debug("Prepaid customer: check billing", []),
+            {ok, [{result, ?prepaidCreditLimitInsufficient}]}
+    end;
 
 send(build_req_dto_s, Req) ->
     ReqId = uuid:unparse(uuid:generate_time()),
@@ -574,3 +565,26 @@ is_deferred(undefined) ->
     false;
 is_deferred(DefDate) ->
     {true, DefDate}.
+
+calc_sending_price(Req) ->
+    Customer = Req#send_req.customer,
+
+    CoverageTab = Req#send_req.coverage_tab,
+    GtwId2Addrs = Req#send_req.routable,
+    DestAddrs = lists:flatten([Addr || {_GtwId, Addr} <- GtwId2Addrs]),
+    {NetworkId2Addrs, []} =
+        alley_services_coverage:route_addrs_to_networks(DestAddrs, CoverageTab),
+
+    Networks = Customer#k1api_auth_response_customer_dto.networks,
+    Providers = Customer#k1api_auth_response_customer_dto.providers,
+    DefaultProviderId = Customer#k1api_auth_response_customer_dto.default_provider_id,
+    NetworkId2SmsPrice = alley_services_coverage:build_network_to_sms_price_map(
+        Networks, Providers, DefaultProviderId),
+
+    Encoding = Req#send_req.encoding,
+    Encoded = Req#send_req.encoded,
+    NumberOfSymbols = size(Encoded),
+    NumberOfParts = alley_services_utils:calc_parts_number(NumberOfSymbols, Encoding),
+
+    alley_services_coverage:calc_sending_price(
+        NetworkId2Addrs, NetworkId2SmsPrice, NumberOfParts).

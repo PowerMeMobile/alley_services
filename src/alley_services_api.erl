@@ -12,6 +12,7 @@
     get_blacklist/0,
     get_delivery_status/4,
     retrieve_sms/4,
+    request_credit/2,
 
     subscribe_incoming_sms/8,
     unsubscribe_incoming_sms/4,
@@ -147,6 +148,34 @@ retrieve_sms(CustomerId, UserId, DestAddr, BatchSize) ->
             end;
         {error, timeout} ->
             ?log_error("Got retrive sms response: timeout", []),
+            {error, timeout}
+    end.
+
+-spec request_credit(customer_id(), float()) ->
+    {allowed, float()} | {denied, float()} | {error, timeout}.
+request_credit(CustomerId, Credit) ->
+    ReqId = uuid:unparse(uuid:generate_time()),
+    Req = #k1api_request_credit_request_dto{
+        id = ReqId,
+        customer_id = CustomerId,
+        credit = Credit
+    },
+    ?log_debug("Sending request credit request: ~p", [Req]),
+    {ok, ReqBin} = adto:encode(Req),
+    case rmql_rpc_client:call(?MODULE, ReqBin, <<"RequestCreditReq">>) of
+        {ok, RespBin} ->
+            case adto:decode(#k1api_request_credit_response_dto{}, RespBin) of
+                {ok, Resp = #k1api_request_credit_response_dto{}} ->
+                    ?log_debug("Got request credit response: ~p", [Resp]),
+                    Result = Resp#k1api_request_credit_response_dto.result,
+                    CreditLeft = Resp#k1api_request_credit_response_dto.credit_left,
+                    {Result, CreditLeft};
+                {error, Error} ->
+                    ?log_error("Request credit response decode error: ~p", [Error]),
+                    {error, Error}
+            end;
+        {error, timeout} ->
+            ?log_error("Got request credit response: timeout", []),
             {error, timeout}
     end.
 

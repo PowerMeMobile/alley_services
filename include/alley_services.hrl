@@ -39,15 +39,16 @@
     protocol_id  :: undefined | binary()
 }).
 
+-define(serverUnreachable, <<"Server cannot be reached">>).
 -define(authError, <<"Access denied. Check your account settings">>).
 -define(originatorNotAllowedError, <<"Specified originator is not allowed">>).
 -define(noAnyDestAddrError, <<"None recipient is specified or available due to your permissions">>).
 -define(invalidDefDateFormatError,
         <<"defDate is invalid. defDate format is MM/DD/YYYY HH:MM">>).
--define(blinkNotSupported,
-        <<"Blink messages are not supported">>).
--define(privateNotSupported,
-        <<"Private messages are not supported">>).
+-define(postpaidCreditLimitExceeded, <<"Customer's postpaid credit limit is exceeded">>).
+-define(prepaidCreditLimitInsufficient, <<"Customer's prepaid credit limit is insufficient">>).
+-define(blinkNotSupported, <<"Blink messages are not supported">>).
+-define(privateNotSupported, <<"Private messages are not supported">>).
 
 -record('DOWN',{
     ref            :: reference(),
