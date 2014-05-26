@@ -290,9 +290,9 @@ send(define_smpp_params, Req) when Req#send_req.action =:= send_binary_sms ->
     Customer = Req#send_req.customer,
     NoRetry = Customer#k1api_auth_response_customer_dto.no_retry,
     DefaultValidity = Customer#k1api_auth_response_customer_dto.default_validity,
-    _DC = list_to_integer(binary_to_list(Req#send_req.data_coding)),
-    ESMClass = list_to_integer(binary_to_list(Req#send_req.esm_class)),
-    ProtocolId = list_to_integer(binary_to_list(Req#send_req.protocol_id)),
+    _DC = binary_to_integer(Req#send_req.data_coding),
+    ESMClass = binary_to_integer(Req#send_req.esm_class),
+    ProtocolId = binary_to_integer(Req#send_req.protocol_id),
     Params = lists:flatten([
         ?just_sms_request_param(<<"registered_delivery">>, true),
         ?just_sms_request_param(<<"service_type">>, <<>>),
@@ -534,7 +534,7 @@ parse_def_date(<<>>) ->
 parse_def_date(undefined) ->
     {ok, undefined};
 parse_def_date(DefDateList) when is_list(DefDateList) ->
-    try [list_to_integer(binary_to_list(D)) || D <- DefDateList] of
+    try [binary_to_integer(D) || D <- DefDateList] of
         [Month, Day, Year, Hour, Min] ->
             DateTime = {{Year, Month, Day}, {Hour, Min, 0}},
             {ok, ac_datetime:datetime_to_timestamp(DateTime)}
