@@ -220,9 +220,9 @@ send(route_to_providers, Req) ->
     case alley_services_coverage:route_addrs_to_providers(DestAddrs, CoverageTab) of
         {[], _} ->
             {ok, [{result, ?noAnyDestAddrError}]};
-        {Routable, UnroutableToProviders} ->
+        {ProvId2Addrs, UnroutableToProviders} ->
             send(route_to_gateways, Req#send_req{
-                routable = Routable,
+                routable = ProvId2Addrs,
                 rejected = Req#send_req.rejected ++ UnroutableToProviders
             })
     end;
@@ -234,9 +234,9 @@ send(route_to_gateways, Req) ->
     case alley_services_coverage:route_addrs_to_gateways(DestAddrs, Providers) of
         {[], _} ->
             {ok, [{result, ?noAnyDestAddrError}]};
-        {Routable, UnroutableToGateways} ->
+        {GtwId2Addrs, UnroutableToGateways} ->
             send(process_msg_type, Req#send_req{
-                routable = Routable,
+                routable = GtwId2Addrs,
                 rejected = Req#send_req.rejected ++ UnroutableToGateways
             })
     end;
@@ -284,7 +284,7 @@ send(define_smpp_params, Req) when Req#send_req.action =:= send_service_sms ->
         ?just_sms_request_param(<<"source_port">>, 9200),
         ?just_sms_request_param(<<"destination_port">>, 2948)
     ]),
-    send(build_req_dto_s, Req#send_req{smpp_params = Params});
+    send(check_billing, Req#send_req{smpp_params = Params});
 
 send(define_smpp_params, Req) when Req#send_req.action =:= send_binary_sms ->
     Customer = Req#send_req.customer,
@@ -303,7 +303,7 @@ send(define_smpp_params, Req) when Req#send_req.action =:= send_binary_sms ->
         ?just_sms_request_param(<<"protocol_id">>, ProtocolId)
         %% ?just_sms_request_param(<<"data_coding">>, SendBinarySmsReq#send_binary_sms_req.data_coding)
      ]),
-    send(build_req_dto_s, Req#send_req{smpp_params = Params});
+    send(check_billing, Req#send_req{smpp_params = Params});
 
 send(define_smpp_params, Req) ->
     Encoding = Req#send_req.encoding,
@@ -319,7 +319,42 @@ send(define_smpp_params, Req) ->
         ?just_sms_request_param(<<"esm_class">>, 3),
         ?just_sms_request_param(<<"protocol_id">>, 0)
     ]) ++ flash(get_boolean(Req#send_req.flash), Encoding),
-    send(build_req_dto_s, Req#send_req{smpp_params = Params});
+    send(check_billing, Req#send_req{smpp_params = Params});
+
+send(check_billing, Req) ->
+    Customer = Req#send_req.customer,
+
+    CoverageTab = Req#send_req.coverage_tab,
+    GtwId2Addrs = Req#send_req.routable,
+    DestAddrs = lists:flatten([Addr || {_GtwId, Addr} <- GtwId2Addrs]),
+    {NetworkId2Addrs, []} =
+        alley_services_coverage:route_addrs_to_networks(DestAddrs, CoverageTab),
+
+    Networks = Customer#k1api_auth_response_customer_dto.networks,
+    Providers = Customer#k1api_auth_response_customer_dto.providers,
+    DefaultProviderId = Customer#k1api_auth_response_customer_dto.default_provider_id,
+    NetworkId2SmsPrice = alley_services_coverage:build_network_to_sms_price_map(
+        Networks, Providers, DefaultProviderId),
+
+    Encoding = Req#send_req.encoding,
+    Encoded = Req#send_req.encoded,
+    NumberOfSymbols = size(Encoded),
+    NumberOfParts = alley_services_utils:calc_parts_number(NumberOfSymbols, Encoding),
+
+    Price = alley_services_coverage:calc_sending_price(
+        NetworkId2Addrs, NetworkId2SmsPrice, NumberOfParts),
+    ?log_debug("Sending price: ~p", [Price]),
+
+    PayType = Customer#k1api_auth_response_customer_dto.pay_type,
+    case PayType of
+        postpaid ->
+            ?log_debug("Postpaid customer: check credit info", []),
+            nop;
+        prepaid ->
+            ?log_debug("Prepaid customer: check billing info", []),
+            nop
+    end,
+    send(build_req_dto_s, Req);
 
 send(build_req_dto_s, Req) ->
     ReqId = uuid:unparse(uuid:generate_time()),
