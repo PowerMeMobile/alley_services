@@ -435,7 +435,7 @@ build_req_dto(ReqId, GatewayId, DestAddrs, Req) ->
     Encoded    = Req#send_req.encoded,
     NumberOfSymbols = size(Encoded),
     NumberOfDests = length(DestAddrs),
-    NumberOfParts = alley_services_utils:get_message_parts(NumberOfSymbols, Encoding),
+    NumberOfParts = alley_services_utils:calc_parts_number(NumberOfSymbols, Encoding),
     MessageIds = get_ids(CustomerId, UserId, NumberOfDests, NumberOfParts),
 
     #just_sms_request_dto{

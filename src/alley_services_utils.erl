@@ -2,7 +2,7 @@
 
 -export([
     addr_to_dto/1,
-    get_message_parts/2
+    calc_parts_number/2
 ]).
 
 -include_lib("alley_dto/include/adto.hrl").
@@ -50,17 +50,17 @@ addr_to_dto(Addr, false, _Length) ->
         npi = ?NPI_UNKNOWN
     }.
 
--spec get_message_parts(pos_integer(), default | ucs) -> pos_integer().
-get_message_parts(Size, default) when Size =< 160 ->
+-spec calc_parts_number(pos_integer(), default | ucs) -> pos_integer().
+calc_parts_number(Size, default) when Size =< 160 ->
     1;
-get_message_parts(Size, default) ->
+calc_parts_number(Size, default) ->
     case (Size rem 153) == 0 of
         true ->  trunc(Size/153);
         false -> trunc(Size/153) + 1
     end;
-get_message_parts(Size, ucs2) when Size =< 70 ->
+calc_parts_number(Size, ucs2) when Size =< 70 ->
     1;
-get_message_parts(Size, ucs2) ->
+calc_parts_number(Size, ucs2) ->
     case (Size rem 67) == 0 of
         true ->  trunc(Size/67);
         false -> trunc(Size/67) + 1
