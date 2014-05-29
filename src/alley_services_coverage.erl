@@ -45,7 +45,7 @@ fill_coverage_tab(Networks, DefaultProviderId, Tab) ->
     ets:insert(Tab, {prefix_lens, PrefixLens}),
     Tab.
 
--spec which_network(#addr{}, ets:tid()) -> {binary(), #addr{}, binary()} | undefined.
+-spec which_network(#addr{}, ets:tid()) -> {network_id(), #addr{}, provider_id()} | undefined.
 which_network(Addr = #addr{}, Tab) ->
     StripZero = alley_services_conf:get(strip_leading_zero),
     CountryCode = alley_services_conf:get(country_code),
