@@ -334,10 +334,12 @@ send(check_billing, Req) ->
             ?log_debug("Postpaid customer: request credit", []),
             case alley_services_api:request_credit(CustomerId, Price) of
                 {allowed, CreditLeft} ->
-                    ?log_debug("Sending allowed. Credit left: ~p", [CreditLeft]),
+                    ?log_debug("Sending allowed. CustomerId: ~p, credit left: ~p",
+                        [CustomerId, CreditLeft]),
                     send(build_req_dto_s, Req);
                 {denied, CreditLeft} ->
-                    ?log_debug("Sending denied. Credit left: ~p", [CreditLeft]),
+                    ?log_error("Sending denied. CustomerId: ~p, credit left: ~p",
+                        [CustomerId, CreditLeft]),
                     {ok, [{result, ?postpaidCreditLimitExceeded}]};
                 {error, timeout} ->
                     {ok, [{result, ?serverUnreachable}]}
