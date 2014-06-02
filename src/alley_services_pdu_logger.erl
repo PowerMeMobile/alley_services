@@ -88,7 +88,7 @@ log(SmsReq) ->
         Pid ->
             {ok, Pid}
     end,
-    gen_server:call(LoggerPid, SmsReq).
+    gen_server:call(LoggerPid, {log_data, fmt_data(SmsReq)}).
 
 %% ===================================================================
 %% gen_server callbacks
@@ -114,10 +114,10 @@ init({CustomerID, UserID}) ->
     end.
 
 %% logging callbacks
-handle_call(#just_sms_request_dto{}, _From, #st{log_level = none} = St) ->
+handle_call({log_data, _}, _From, #st{log_level = none} = St) ->
     {reply, ok, St};
-handle_call(SmsReq = #just_sms_request_dto{}, _From, St) ->
-    St1 = write_log_msg(fmt_data(SmsReq), ensure_actual_date(St)),
+handle_call({log_data, FmtData}, _From, St) ->
+    St1 = write_log_msg(FmtData, ensure_actual_date(St)),
     {reply, ok, St1};
 handle_call(_Request, _From, St) ->
     {stop, unexpected_call, St}.
