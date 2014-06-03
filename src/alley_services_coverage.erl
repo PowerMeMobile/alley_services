@@ -174,7 +174,8 @@ route_addrs_to_providers([], _CoverageTab, Routable, Unroutable) ->
 route_addrs_to_providers([Addr | Rest], CoverageTab, Routable, Unroutable) ->
     case alley_services_coverage:which_network(Addr, CoverageTab) of
         {_NetworkId, MaybeFixedAddr, ProviderId} ->
-            Routable2 = dict:append(ProviderId, MaybeFixedAddr, Routable),
+            UpdateFun = fun(Addrs) -> [MaybeFixedAddr | Addrs] end,
+            Routable2 = dict:update(ProviderId, UpdateFun, [MaybeFixedAddr], Routable),
             route_addrs_to_providers(Rest, CoverageTab, Routable2, Unroutable);
         undefined ->
             route_addrs_to_providers(Rest, CoverageTab, Routable, [Addr | Unroutable])
@@ -212,7 +213,8 @@ route_addrs_to_networks([], _CoverageTab, Routable, Unroutable) ->
 route_addrs_to_networks([Addr | Rest], CoverageTab, Routable, Unroutable) ->
     case alley_services_coverage:which_network(Addr, CoverageTab) of
         {NetworkId, _MaybeFixedAddr, _ProviderId} ->
-            Routable2 = dict:append(NetworkId, Addr, Routable),
+            UpdateFun = fun(Addrs) -> [Addr | Addrs] end,
+            Routable2 = dict:update(NetworkId, UpdateFun, [Addr], Routable),
             route_addrs_to_networks(Rest, CoverageTab, Routable2, Unroutable);
         undefined ->
             route_addrs_to_networks(Rest, CoverageTab, Routable, [Addr | Unroutable])
