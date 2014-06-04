@@ -1,8 +1,5 @@
 -module(alley_services_mt).
 
-%% TODO
-%% Disable receipts in Kelly
-
 -behaviour(gen_server).
 
 -ignore_xref([{start_link, 0}]).
@@ -270,10 +267,11 @@ send(define_text_encoding, Req) ->
 
 send(define_smpp_params, Req) when Req#send_req.action =:= send_service_sms ->
     Customer = Req#send_req.customer,
+    ReceiptsAllowed = Customer#k1api_auth_response_customer_dto.receipts_allowed,
     NoRetry = Customer#k1api_auth_response_customer_dto.no_retry,
     DefaultValidity = Customer#k1api_auth_response_customer_dto.default_validity,
     Params = lists:flatten([
-        ?just_sms_request_param(<<"registered_delivery">>, true),
+        ?just_sms_request_param(<<"registered_delivery">>, ReceiptsAllowed),
         ?just_sms_request_param(<<"service_type">>, <<>>),
         ?just_sms_request_param(<<"no_retry">>, NoRetry),
         ?just_sms_request_param(<<"validity_period">>, fmt_validity(DefaultValidity)),
@@ -288,13 +286,14 @@ send(define_smpp_params, Req) when Req#send_req.action =:= send_service_sms ->
 
 send(define_smpp_params, Req) when Req#send_req.action =:= send_binary_sms ->
     Customer = Req#send_req.customer,
+    ReceiptsAllowed = Customer#k1api_auth_response_customer_dto.receipts_allowed,
     NoRetry = Customer#k1api_auth_response_customer_dto.no_retry,
     DefaultValidity = Customer#k1api_auth_response_customer_dto.default_validity,
     _DC = binary_to_integer(Req#send_req.data_coding),
     ESMClass = binary_to_integer(Req#send_req.esm_class),
     ProtocolId = binary_to_integer(Req#send_req.protocol_id),
     Params = lists:flatten([
-        ?just_sms_request_param(<<"registered_delivery">>, true),
+        ?just_sms_request_param(<<"registered_delivery">>, ReceiptsAllowed),
         ?just_sms_request_param(<<"service_type">>, <<>>),
         ?just_sms_request_param(<<"no_retry">>, NoRetry),
         ?just_sms_request_param(<<"validity_period">>, fmt_validity(DefaultValidity)),
@@ -308,10 +307,11 @@ send(define_smpp_params, Req) when Req#send_req.action =:= send_binary_sms ->
 send(define_smpp_params, Req) ->
     Encoding = Req#send_req.encoding,
     Customer = Req#send_req.customer,
+    ReceiptsAllowed = Customer#k1api_auth_response_customer_dto.receipts_allowed,
     NoRetry = Customer#k1api_auth_response_customer_dto.no_retry,
     DefaultValidity = Customer#k1api_auth_response_customer_dto.default_validity,
     Params = lists:flatten([
-        ?just_sms_request_param(<<"registered_delivery">>, true),
+        ?just_sms_request_param(<<"registered_delivery">>, ReceiptsAllowed),
         ?just_sms_request_param(<<"service_type">>, <<>>),
         ?just_sms_request_param(<<"no_retry">>, NoRetry),
         ?just_sms_request_param(<<"validity_period">>, fmt_validity(DefaultValidity)),
