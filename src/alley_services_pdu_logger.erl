@@ -256,7 +256,7 @@ fmt_data(SmsReq = #just_sms_request_dto{}) ->
         tuple_to_list(SmsReq#just_sms_request_dto{params = PrettyParams}),
     KV = lists:zip(Fields, Values),
 
-    TimeStamp = {_, _, MilSec} = os:timestamp(),
+    TimeStamp = {_, _, MilSec} = ac_datetime:utc_timestamp(),
     {{Year, Month, Day}, {Hour, Min, Sec}} = calendar:now_to_local_time(TimeStamp),
     TimeFmt =
         io_lib:format("~w-~2..0w-~2..0w ~2..0w:~2..0w:~2..0w.~3..0w > ",

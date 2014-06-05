@@ -5,7 +5,8 @@
     {applications, [
         kernel,
         stdlib,
-        rmql
+        rmql,
+        alley_common
     ]},
     {mod, {alley_services_app, []}},
     {env, []}

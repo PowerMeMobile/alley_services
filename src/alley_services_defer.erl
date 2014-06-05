@@ -10,6 +10,11 @@
     defer/3
 ]).
 
+%% Service API
+-export([
+    fetch_all/0
+]).
+
 %% gen_server callbacks
 -export([
     init/1,
@@ -36,9 +41,17 @@
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
--spec defer(term(), os:timestamp(), term()) -> ok.
+-spec defer(term(), ac_datetime:timestamp(), term()) -> ok.
 defer(Id, Timestamp, Req) ->
     gen_server:call(?MODULE, {defer, Id, Timestamp, Req}).
+
+%% ===================================================================
+%% Service API
+%% ===================================================================
+
+%-spec fetch_all() -> [{{customer_id(), user_id(), type()}, record()}].
+fetch_all() ->
+    dets:foldl(fun(I, Acc) -> [I | Acc] end, [], ?MODULE).
 
 %% ===================================================================
 %% gen_server callbacks
@@ -60,7 +73,7 @@ handle_cast(Req, St) ->
     {stop, {unexpected_cast, Req}, St}.
 
 handle_info(timeout, St) ->
-    Ts = os:timestamp(),
+    Ts = ac_datetime:utc_timestamp(),
     DeferedTasks = qlc:e(qlc:q(
         [R || R <- dets:table(?MODULE), element(2, R) < Ts]
     )),

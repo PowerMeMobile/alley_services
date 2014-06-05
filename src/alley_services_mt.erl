@@ -550,7 +550,13 @@ parse_def_date(DefDateList) when is_list(DefDateList) ->
     try [binary_to_integer(D) || D <- DefDateList] of
         [Month, Day, Year, Hour, Min] ->
             DateTime = {{Year, Month, Day}, {Hour, Min, 0}},
-            {ok, ac_datetime:datetime_to_timestamp(DateTime)}
+            RefDate = ac_datetime:datetime_to_timestamp(DateTime),
+            case RefDate > ac_datetime:utc_timestamp() of
+                true ->
+                    {ok, RefDate};
+                false ->
+                    {error, invalid}
+            end
     catch
         _:_ ->
             {error, invalid}

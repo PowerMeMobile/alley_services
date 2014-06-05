@@ -80,7 +80,6 @@ delete(CustomerId, UserId, Type) ->
 delete(CustomerId, UserId, Type, Password) ->
     gen_server:call(?MODULE, {delete, {{CustomerId, UserId, Type, Password}, '_'}}).
 
-
 %% ===================================================================
 %% Service API
 %% ===================================================================
