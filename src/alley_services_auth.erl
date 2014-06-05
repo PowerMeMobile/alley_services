@@ -32,7 +32,7 @@ authenticate(CustomerId, UserId, Type, Password) ->
 %% ===================================================================
 
 authenticate(check_cache, CustomerId, UserId, Type, Password) ->
-    case alley_services_auth_cache:fetch(CustomerId, UserId, Type) of
+    case alley_services_auth_cache:fetch(CustomerId, UserId, Type, Password) of
         {ok, AuthResp} ->
             {ok, AuthResp};
         not_found ->
@@ -57,7 +57,7 @@ authenticate(request_backend, CustomerId, UserId, Type, Password) ->
                     ?log_debug("Got auth response: ~p", [AuthResp]),
                     case Result of
                         {customer, _} ->
-                            ok = alley_services_auth_cache:store(CustomerId, UserId, Type, AuthResp);
+                            ok = alley_services_auth_cache:store(CustomerId, UserId, Type, Password, AuthResp);
                         {error, _} ->
                             ok
                     end,

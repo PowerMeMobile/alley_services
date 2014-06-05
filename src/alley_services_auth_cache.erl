@@ -7,11 +7,12 @@
 %% API exports
 -export([
     start_link/0,
-    store/4,
-    fetch/3,
+    store/5,
+    fetch/4,
     delete/1,
     delete/2,
-    delete/3
+    delete/3,
+    delete/4
 ]).
 
 %% Service API
@@ -34,6 +35,7 @@
 
 -type customer_id() :: string() | binary().
 -type user_id()     :: string() | binary().
+-type password()    :: string() | binary().
 -type type()        :: atom().
 
 -record(st, {}).
@@ -46,15 +48,15 @@
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
--spec store(customer_id(), user_id(), type(), record()) -> ok.
-store(CustomerId, UserId, Type, AuthResp) ->
-    Key = {CustomerId, UserId, Type},
+-spec store(customer_id(), user_id(), type(), password(), record()) -> ok.
+store(CustomerId, UserId, Type, Password, AuthResp) ->
+    Key = {CustomerId, UserId, Type, Password},
     gen_server:call(?MODULE, {store, Key, AuthResp}).
 
--spec fetch(customer_id(), user_id(), type()) ->
+-spec fetch(customer_id(), user_id(), type(), password()) ->
     {ok, record()} | not_found.
-fetch(CustomerId, UserId, Type) ->
-    Key = {CustomerId, UserId, Type},
+fetch(CustomerId, UserId, Type, Password) ->
+    Key = {CustomerId, UserId, Type, Password},
     case dets:lookup(?MODULE, Key) of
         [] ->
             not_found;
@@ -72,7 +74,12 @@ delete(CustomerId, UserId) ->
 
 -spec delete(customer_id(), user_id() | '_', type() | '_') -> ok.
 delete(CustomerId, UserId, Type) ->
-    gen_server:call(?MODULE, {delete, {{CustomerId, UserId, Type}, '_'}}).
+    gen_server:call(?MODULE, {delete, {{CustomerId, UserId, Type, '_'}, '_'}}).
+
+-spec delete(customer_id(), user_id() | '_', type() | '_', password() | '_') -> ok.
+delete(CustomerId, UserId, Type, Password) ->
+    gen_server:call(?MODULE, {delete, {{CustomerId, UserId, Type, Password}, '_'}}).
+
 
 %% ===================================================================
 %% Service API
