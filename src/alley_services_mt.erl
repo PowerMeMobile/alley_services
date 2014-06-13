@@ -289,18 +289,18 @@ send(define_smpp_params, Req) when Req#send_req.action =:= send_binary_sms ->
     ReceiptsAllowed = Customer#k1api_auth_response_customer_dto.receipts_allowed,
     NoRetry = Customer#k1api_auth_response_customer_dto.no_retry,
     DefaultValidity = Customer#k1api_auth_response_customer_dto.default_validity,
-    _DC = binary_to_integer(Req#send_req.data_coding),
-    ESMClass = binary_to_integer(Req#send_req.esm_class),
-    ProtocolId = binary_to_integer(Req#send_req.protocol_id),
+    DC = maybe_binary_to_integer(Req#send_req.data_coding),
+    ESMClass = maybe_binary_to_integer(Req#send_req.esm_class),
+    ProtocolId = maybe_binary_to_integer(Req#send_req.protocol_id),
     Params = lists:flatten([
         ?just_sms_request_param(<<"registered_delivery">>, ReceiptsAllowed),
         ?just_sms_request_param(<<"service_type">>, <<>>),
         ?just_sms_request_param(<<"no_retry">>, NoRetry),
         ?just_sms_request_param(<<"validity_period">>, fmt_validity(DefaultValidity)),
         ?just_sms_request_param(<<"priority_flag">>, 0),
+        ?just_sms_request_param(<<"data_coding">>, DC),
         ?just_sms_request_param(<<"esm_class">>, ESMClass),
         ?just_sms_request_param(<<"protocol_id">>, ProtocolId)
-        %% ?just_sms_request_param(<<"data_coding">>, SendBinarySmsReq#send_binary_sms_req.data_coding)
      ]),
     send(check_billing, Req#send_req{smpp_params = Params});
 
@@ -596,3 +596,8 @@ calc_sending_price(Req) ->
 
     alley_services_coverage:calc_sending_price(
         NetworkId2Addrs, NetworkId2SmsPrice, NumberOfParts).
+
+maybe_binary_to_integer(undefined) ->
+    0;
+maybe_binary_to_integer(Binary) ->
+    binary_to_integer(Binary).
