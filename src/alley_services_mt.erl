@@ -318,7 +318,7 @@ send(define_smpp_params, Req) ->
         ?just_sms_request_param(<<"priority_flag">>, 0),
         ?just_sms_request_param(<<"esm_class">>, 3),
         ?just_sms_request_param(<<"protocol_id">>, 0)
-    ]) ++ flash(get_boolean(Req#send_req.flash), Encoding),
+    ]) ++ flash(Req#send_req.flash, Encoding),
     send(check_billing, Req#send_req{smpp_params = Params});
 
 send(check_billing, Req) ->
@@ -509,9 +509,6 @@ fmt_validity(SecondsTotal) ->
         lists:flatten(io_lib:format("~2..0w~2..0w~2..0w~2..0w~2..0w~2..0w000R",
                   [Years, Months, Days, Hours, Minutes, Seconds])),
     list_to_binary(StringValidity).
-
-get_boolean(<<"true">>) -> true;
-get_boolean(<<"false">>) -> false.
 
 convert_numbers(Text, <<"ArabicWithArabicNumbers">>) ->
     case unicode:characters_to_list(Text, utf8) of
