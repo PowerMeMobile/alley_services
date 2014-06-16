@@ -241,11 +241,15 @@ send(route_to_gateways, Req) ->
 send(process_msg_type, Req) when
         Req#send_req.text =:= undefined andalso
         Req#send_req.action =:= send_service_sms ->
-    Text =
-        <<"<%SERVICEMESSAGE:",
-        (Req#send_req.s_name)/binary, ";",
-        (Req#send_req.s_url)/binary, "%>">>,
-    send(process_msg_type, Req#send_req{text = Text});
+    Name = Req#send_req.s_name,
+    Url = Req#send_req.s_url,
+    case is_binary(Name) andalso is_binary(Url) of
+        true ->
+            Text = <<"<%SERVICEMESSAGE:", Name/binary, ";", Url/binary, "%>">>,
+            send(process_msg_type, Req#send_req{text = Text});
+        false ->
+            {ok, [{result, ?serviceNameAndUrlExpected}]}
+    end;
 
 send(process_msg_type, Req) when
         Req#send_req.text =:= undefined andalso

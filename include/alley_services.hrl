@@ -49,6 +49,7 @@
 -define(prepaidCreditLimitInsufficient, <<"Customer's prepaid credit limit is insufficient">>).
 -define(blinkNotSupported, <<"Blink messages are not supported">>).
 -define(privateNotSupported, <<"Private messages are not supported">>).
+-define(serviceNameAndUrlExpected, <<"Service name and url is expected">>).
 
 -record('DOWN',{
     ref            :: reference(),
