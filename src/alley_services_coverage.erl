@@ -1,5 +1,6 @@
 -module(alley_services_coverage).
 
+-include("application.hrl").
 -include_lib("alley_dto/include/adto.hrl").
 
 %-define(TEST, 1).
@@ -47,8 +48,8 @@ fill_coverage_tab(Networks, DefaultProviderId, Tab) ->
 
 -spec which_network(#addr{}, ets:tid()) -> {network_id(), #addr{}, provider_id()} | undefined.
 which_network(Addr = #addr{}, Tab) ->
-    StripZero = alley_services_conf:get(strip_leading_zero),
-    CountryCode = alley_services_conf:get(country_code),
+    {ok, StripZero} = application:get_env(?APP, strip_leading_zero),
+    {ok, CountryCode} = application:get_env(?APP, country_code),
     [{prefix_lens, PrefixLens}] = ets:lookup(Tab, prefix_lens),
     AddrInt = to_international(Addr, StripZero, CountryCode),
     Number = AddrInt#addr.addr,
@@ -189,7 +190,8 @@ route_addrs_to_gateways([{ProvId, Addrs} | Rest], Providers, Routable, Unroutabl
             %% the configuration issue. nowhere to route.
             route_addrs_to_gateways(Rest, Providers, Routable, Addrs ++ Unroutable);
         Provider ->
-            UseBulkGtw = length(Addrs) >= alley_services_conf:get(bulk_threshold),
+            {ok, BulkThreshold} = application:get_env(?APP, bulk_threshold),
+            UseBulkGtw = length(Addrs) >= BulkThreshold,
             %% try to workaround possible configuration issues.
             case {Provider#provider_dto.gateway_id, Provider#provider_dto.bulk_gateway_id, UseBulkGtw} of
                 {undefined, undefined, _} ->
