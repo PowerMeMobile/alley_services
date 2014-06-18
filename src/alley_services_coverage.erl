@@ -252,6 +252,8 @@ calc_sms_price(Network, ProviderId2SmsAddPoints) ->
 -ifdef(TEST).
 
 fill_coverage(DefaultProviderId) ->
+    ok = application:set_env(?APP, country_code, <<"999">>),
+    ok = application:set_env(?APP, strip_leading_zero, false),
     Network1 = #network_dto{
         id = <<"NID1">>,
         country_code = <<"999">>,
