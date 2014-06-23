@@ -72,7 +72,7 @@ send(Req) ->
 
 -spec publish({publish_action(), payload(), req_id(), gateway_id()}) -> ok.
 publish(Req) ->
-    gen_server:call(?MODULE, Req).
+    gen_server:call(?MODULE, Req, 60000).
 
 %% ===================================================================
 %% gen_server callbacks

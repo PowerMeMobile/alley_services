@@ -88,7 +88,7 @@ log(SmsReq) ->
         Pid ->
             {ok, Pid}
     end,
-    gen_server:call(LoggerPid, {log_data, fmt_data(SmsReq)}).
+    gen_server:call(LoggerPid, {log_data, fmt_data(SmsReq)}, 30000).
 
 %% ===================================================================
 %% gen_server callbacks

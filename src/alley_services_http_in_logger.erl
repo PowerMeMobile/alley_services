@@ -81,7 +81,7 @@ log(RespCode, RespHeaders, RespBody, Req, ReqBody) ->
         req = Req,
         req_body = ReqBody
     },
-    gen_server:call(?MODULE, LogTask).
+    gen_server:call(?MODULE, LogTask, 30000).
 
 %% ===================================================================
 %% gen_server callbacks
