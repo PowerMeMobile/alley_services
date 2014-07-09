@@ -7,7 +7,8 @@
 %% API
 -export([
     start_link/0,
-    set_loglevel/1
+    set_loglevel/1,
+    get_loglevel/0
 ]).
 
 %% Cowboy onresponse hook callback
@@ -67,6 +68,10 @@ set_loglevel(LogLevel) when
                 LogLevel =:= debug ->
     gen_server:cast(?MODULE, {set_loglevel, LogLevel}).
 
+-spec get_loglevel() -> {ok, log_level()} | {error, term()}.
+get_loglevel() ->
+    gen_server:call(?MODULE, get_loglevel).
+
 %% ===================================================================
 %% Cowboy onresponse hook callback
 %% ===================================================================
@@ -81,7 +86,7 @@ log(RespCode, RespHeaders, RespBody, Req, ReqBody) ->
         req = Req,
         req_body = ReqBody
     },
-    gen_server:call(?MODULE, LogTask).
+    gen_server:call(?MODULE, LogTask, 30000).
 
 %% ===================================================================
 %% gen_server callbacks
@@ -101,7 +106,8 @@ handle_call(#log{}, _From, #st{log_level = none} = St) ->
 handle_call(LogData = #log{}, _From, St) ->
     St1 = write_log_msg(fmt_data(LogData, St#st.log_level), ensure_actual_date(St)),
     {reply, ok, St1};
-
+handle_call(get_loglevel, _From, #st{log_level = LogLevel} = St) ->
+    {reply, {ok, LogLevel}, St};
 handle_call(_Request, _From, State) ->
     {stop, unexpected_call, State}.
 

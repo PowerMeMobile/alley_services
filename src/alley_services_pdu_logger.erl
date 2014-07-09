@@ -12,6 +12,8 @@
     start_link/2,
     set_loglevel/2,
     set_loglevel/3,
+    get_loglevel/1,
+    get_loglevel/2,
     log/1
 ]).
 
@@ -64,15 +66,28 @@ set_loglevel(Pid, LogLevel) when
     gen_server:cast(Pid, {set_loglevel, LogLevel}).
 
 -spec set_loglevel(binary(), binary(), log_level()) ->
-    ok | logger_not_running.
+    ok | {error, logger_not_running}.
 set_loglevel(CustomerID, UserID, LogLevel) when
-                LogLevel =:= none orelse
-                LogLevel =:= debug ->
+        LogLevel =:= none orelse LogLevel =:= debug ->
     case gproc:lookup_local_name({CustomerID, UserID}) of
         undefined ->
             {error, logger_not_running};
         Pid ->
             set_loglevel(Pid, LogLevel)
+    end.
+
+-spec get_loglevel(pid()) -> {ok, log_level()} | {error, term()}.
+get_loglevel(Pid) ->
+    gen_server:call(Pid, get_loglevel).
+
+-spec get_loglevel(binary(), binary()) ->
+    {ok, log_level()} | {error, logger_not_running}.
+get_loglevel(CustomerID, UserID) ->
+    case gproc:lookup_local_name({CustomerID, UserID}) of
+        undefined ->
+            {error, logger_not_running};
+        Pid ->
+            get_loglevel(Pid)
     end.
 
 -spec log(#just_sms_request_dto{}) -> ok.
@@ -88,7 +103,7 @@ log(SmsReq) ->
         Pid ->
             {ok, Pid}
     end,
-    gen_server:call(LoggerPid, {log_data, fmt_data(SmsReq)}).
+    gen_server:call(LoggerPid, {log_data, fmt_data(SmsReq)}, 30000).
 
 %% ===================================================================
 %% gen_server callbacks
@@ -119,6 +134,8 @@ handle_call({log_data, _}, _From, #st{log_level = none} = St) ->
 handle_call({log_data, FmtData}, _From, St) ->
     St1 = write_log_msg(FmtData, ensure_actual_date(St)),
     {reply, ok, St1};
+handle_call(get_loglevel, _From, #st{log_level = LogLevel} = St) ->
+    {reply, {ok, LogLevel}, St};
 handle_call(_Request, _From, St) ->
     {stop, unexpected_call, St}.
 
