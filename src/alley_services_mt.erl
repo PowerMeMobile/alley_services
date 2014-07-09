@@ -338,7 +338,7 @@ send(check_billing, Req) ->
 send(request_credit, Req) ->
     CustomerId = Req#send_req.customer_id,
     Price = calc_sending_price(Req),
-    ?log_debug("Postpaid CustomerId: ~p, Sending price: ~p",
+    ?log_debug("Postpaid CustomerId: ~p, sending price: ~p",
         [CustomerId, Price]),
     case alley_services_api:request_credit(CustomerId, Price) of
         {allowed, CreditLeft} ->
@@ -359,7 +359,7 @@ send(billy_reserve, Req) ->
     CustomerUuid = Customer#k1api_auth_response_customer_dto.uuid,
     UserId = Req#send_req.user_name,
     ServiceRequest = build_billy_service_request(Req),
-    ?log_debug("Prepaid CustomerUuid: ~p, UserId: ~p, Service request: ~p",
+    ?log_debug("Prepaid CustomerUuid: ~p, UserId: ~p, service request: ~p",
         [CustomerUuid, UserId, ServiceRequest]),
     case billy_client:reserve(SessionId, ?CLIENT_TYPE_MM,
             CustomerUuid, UserId, ServiceRequest) of
