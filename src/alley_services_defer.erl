@@ -49,7 +49,7 @@ defer(Id, Timestamp, Req) ->
 %% Service API
 %% ===================================================================
 
-%-spec fetch_all() -> [{{customer_id(), user_id(), type()}, record()}].
+-spec fetch_all() -> [{term(), ac_datetime:timestamp(), term()}].
 fetch_all() ->
     dets:foldl(fun(I, Acc) -> [I | Acc] end, [], ?MODULE).
 

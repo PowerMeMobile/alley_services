@@ -96,7 +96,6 @@ calc_sending_price(NetworkId2Addrs, NetworkId2SmsPrice, NumOfMsgs) ->
     ),
     OneMsgPrice * NumOfMsgs.
 
-
 %% ===================================================================
 %% Internal
 %% ===================================================================
