@@ -224,15 +224,15 @@ route_addrs_to_gateways([], _Providers, Routable, Unroutable) ->
 route_addrs_to_gateways([{ProvId, Addrs} | Rest], Providers, Routable, Unroutable) ->
     case lists:keyfind(ProvId, #provider_dto.id, Providers) of
         false ->
-            %% the configuration issue. nowhere to route.
+            %% the misconfiguration issue. nowhere to route.
             route_addrs_to_gateways(Rest, Providers, Routable, Addrs ++ Unroutable);
         Provider ->
             {ok, BulkThreshold} = application:get_env(?APP, bulk_threshold),
             UseBulkGtw = length(Addrs) >= BulkThreshold,
-            %% try to workaround possible configuration issues.
+            %% try to workaround possible misconfiguration issues.
             case {Provider#provider_dto.gateway_id, Provider#provider_dto.bulk_gateway_id, UseBulkGtw} of
                 {undefined, undefined, _} ->
-                    %% the configuration issue. nowhere to route.
+                    %% the misconfiguration issue. nowhere to route.
                     route_addrs_to_gateways(Rest, Providers, Routable, Addrs ++ Unroutable);
                 {GtwId, undefined, _} ->
                     %% route all via regular gateway.
