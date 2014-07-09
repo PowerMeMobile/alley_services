@@ -25,8 +25,9 @@
 -include("alley_services.hrl").
 -include_lib("alley_dto/include/adto.hrl").
 -include_lib("alley_common/include/logging.hrl").
--include_lib("amqp_client/include/amqp_client.hrl").
 -include_lib("alley_common/include/gen_server_spec.hrl").
+-include_lib("amqp_client/include/amqp_client.hrl").
+-include_lib("billy_client/include/billy_client.hrl").
 
 -define(just_sms_request_param(Name, Param),
     apply(fun
@@ -326,31 +327,57 @@ send(define_smpp_params, Req) ->
     send(check_billing, Req#send_req{smpp_params = Params});
 
 send(check_billing, Req) ->
-    Price = calc_sending_price(Req),
-    ?log_debug("Sending price: ~p", [Price]),
-
-    CustomerId = Req#send_req.customer_id,
     Customer = Req#send_req.customer,
-
-    PayType = Customer#k1api_auth_response_customer_dto.pay_type,
-    case PayType of
+    case Customer#k1api_auth_response_customer_dto.pay_type of
         postpaid ->
-            ?log_debug("Postpaid customer: request credit", []),
-            case alley_services_api:request_credit(CustomerId, Price) of
-                {allowed, CreditLeft} ->
-                    ?log_debug("Sending allowed. CustomerId: ~p, credit left: ~p",
-                        [CustomerId, CreditLeft]),
-                    send(build_req_dto_s, Req);
-                {denied, CreditLeft} ->
-                    ?log_error("Sending denied. CustomerId: ~p, credit left: ~p",
-                        [CustomerId, CreditLeft]),
-                    {ok, [{result, ?postpaidCreditLimitExceeded}]};
-                {error, timeout} ->
-                    {ok, [{result, ?serverUnreachable}]}
-            end;
+            send(request_credit, Req);
         prepaid ->
-            ?log_debug("Prepaid customer: check billing", []),
-            {ok, [{result, ?prepaidCreditLimitInsufficient}]}
+            send(billy_reserve, Req)
+    end;
+
+send(request_credit, Req) ->
+    CustomerId = Req#send_req.customer_id,
+    Price = calc_sending_price(Req),
+    ?log_debug("Postpaid CustomerId: ~p, Sending price: ~p",
+        [CustomerId, Price]),
+    case alley_services_api:request_credit(CustomerId, Price) of
+        {allowed, CreditLeft} ->
+            ?log_debug("Sending allowed. CustomerId: ~p, credit left: ~p",
+                [CustomerId, CreditLeft]),
+             send(build_req_dto_s, Req);
+        {denied, CreditLeft} ->
+            ?log_error("Sending denied. CustomerId: ~p, credit left: ~p",
+                [CustomerId, CreditLeft]),
+            {ok, [{result, ?postpaidCreditLimitExceeded}]};
+        {error, timeout} ->
+            {ok, [{result, ?serverUnreachable}]}
+    end;
+
+send(billy_reserve, Req) ->
+    {ok, SessionId} = mm_srv_billy_session:get_session_id(),
+    Customer = Req#send_req.customer,
+    CustomerUuid = Customer#k1api_auth_response_customer_dto.uuid,
+    UserId = Req#send_req.user_name,
+    ServiceRequest = build_billy_service_request(Req),
+    ?log_debug("Prepaid CustomerUuid: ~p, UserId: ~p, Service request: ~p",
+        [CustomerUuid, UserId, ServiceRequest]),
+    case billy_client:reserve(SessionId, ?CLIENT_TYPE_MM,
+            CustomerUuid, UserId, ServiceRequest) of
+        {accepted, TransactionId} ->
+            ?log_debug("Sending allowed", []),
+            {ok, Reply} = send(build_req_dto_s, Req),
+            case proplists:get_value(id, Reply) of
+                undefined ->
+                    ?log_debug("Rollback", []),
+                    billy_client:rollback(TransactionId);
+                _ ->
+                    ?log_debug("Commit", []),
+                    billy_client:commit(TransactionId)
+            end,
+            {ok, Reply};
+        {rejected, Reason} ->
+            ?log_error("Sending denied by Billy with: ~p", [Reason]),
+            {ok, [{result, atom_to_binary(Reason, utf8)}]}
     end;
 
 send(build_req_dto_s, Req) ->
@@ -597,6 +624,32 @@ calc_sending_price(Req) ->
 
     alley_services_coverage:calc_sending_price(
         NetworkId2Addrs, NetworkId2SmsPrice, NumberOfParts).
+
+build_billy_service_request(Req) ->
+    CoverageTab = Req#send_req.coverage_tab,
+    GtwId2Addrs = Req#send_req.routable,
+    DestAddrs = lists:flatten([Addr || {_GtwId, Addr} <- GtwId2Addrs]),
+    {NetworkId2Addrs, []} =
+        alley_services_coverage:route_addrs_to_networks(DestAddrs, CoverageTab),
+
+    Customer = Req#send_req.customer,
+    Networks = Customer#k1api_auth_response_customer_dto.networks,
+    NetTypeTab = ets:new(net_type_tab, [private]),
+    alley_services_coverage:fill_network_type_tab(Networks, NetTypeTab),
+
+    [{network_id_to_service_type(NID, NetTypeTab), length(Addrs)}
+        || {NID, Addrs} <- NetworkId2Addrs].
+
+network_id_to_service_type(NetworkId, Tab) ->
+    case alley_services_coverage:which_network_type(
+            NetworkId, Tab) of
+        on_net ->
+            ?SERVICE_TYPE_SMS_ON;
+        off_net ->
+            ?SERVICE_TYPE_SMS_OFF;
+        int_net ->
+            ?SERVICE_TYPE_SMS_INT
+    end.
 
 maybe_binary_to_integer(undefined) ->
     0;
