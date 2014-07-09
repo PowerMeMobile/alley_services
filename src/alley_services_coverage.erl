@@ -11,7 +11,9 @@
 
 -export([
     fill_coverage_tab/3,
+    fill_network_type_tab/2,
     which_network/2,
+    which_network_type/2,
     route_addrs_to_providers/2,
     route_addrs_to_gateways/2,
     route_addrs_to_networks/2,
@@ -46,6 +48,33 @@ fill_coverage_tab(Networks, DefaultProviderId, Tab) ->
     ets:insert(Tab, {prefix_lens, PrefixLens}),
     Tab.
 
+-spec fill_network_type_tab([#network_dto{}], ets:tid()) -> ets:tid().
+fill_network_type_tab(Networks, Tab) ->
+    OnNetNs = [N || N <- Networks, N#network_dto.is_home],
+
+    OnNetCCs =
+        case OnNetNs of
+            [] ->
+                %% the misconfiguration issue. there's no a home network.
+                %% add the country code from settings to treat, at least,
+                %% local network as off_net.
+                {ok, CC} = application:get_env(?APP, country_code),
+                [CC];
+            _  ->
+                lists:usort([N#network_dto.country_code || N <- OnNetNs])
+        end,
+
+    OnNetNIDs = [N#network_dto.id || N <- OnNetNs],
+    OffNetNIDs = [N#network_dto.id || N <- Networks,
+        N#network_dto.is_home =:= false,
+        lists:member(N#network_dto.country_code, OnNetCCs)],
+
+    lists:foreach(
+        fun(NID) -> ets:insert(Tab, {NID, on_net}) end, OnNetNIDs),
+    lists:foreach(
+        fun(NID) -> ets:insert(Tab, {NID, off_net}) end, OffNetNIDs),
+    Tab.
+
 -spec which_network(#addr{}, ets:tid()) -> {network_id(), #addr{}, provider_id()} | undefined.
 which_network(Addr = #addr{}, Tab) ->
     {ok, StripZero} = application:get_env(?APP, strip_leading_zero),
@@ -58,6 +87,15 @@ which_network(Addr = #addr{}, Tab) ->
             undefined;
         {NetworkId, ProviderId} ->
             {NetworkId, AddrInt, ProviderId}
+    end.
+
+-spec which_network_type(network_id(), ets:tid()) -> on_net | off_net | int_net.
+which_network_type(NetworkId, Tab) ->
+    case ets:lookup(Tab, NetworkId) of
+        [{NetworkId, NetType}] ->
+            NetType;
+        [] ->
+            int_net
     end.
 
 -spec route_addrs_to_providers([#addr{}], ets:tab()) ->
@@ -257,7 +295,7 @@ networks() ->
         number_len = 12,
         prefixes = [<<"01">>, <<"02">>],
         provider_id = <<"PID1">>,
-        is_home = true
+        is_home = false
     },
     Network2 = #network_dto{
         id = <<"NID2">>,
@@ -337,6 +375,46 @@ which_network_failure_test() ->
     Expected = undefined,
     Actual = which_network(Addr, Tab),
     ?assertEqual(Expected, Actual).
+
+fill_network_type_tab_1_test() ->
+    Networks = networks(),
+    Tab = ets:new(map, [ordered_set]),
+    fill_network_type_tab(Networks, Tab),
+    Expected = [
+        {<<"NID1">>, off_net},
+        {<<"NID2">>, off_net}
+    ],
+    Actual = ets:tab2list(Tab),
+    ?assertEqual(Expected, Actual).
+
+fill_network_type_tab_2_test() ->
+    [N | Ns] = networks(),
+    Networks = [N#network_dto{is_home = true} | Ns],
+    Tab = ets:new(map, [ordered_set]),
+    fill_network_type_tab(Networks, Tab),
+    Expected = [
+        {<<"NID1">>, on_net},
+        {<<"NID2">>, off_net}
+    ],
+    Actual = ets:tab2list(Tab),
+    ?assertEqual(Expected, Actual).
+
+which_network_type_1_test() ->
+    Networks = networks(),
+    Tab = ets:new(map, [ordered_set]),
+    fill_network_type_tab(Networks, Tab),
+    ?assertEqual(off_net, which_network_type(<<"NID1">>, Tab)),
+    ?assertEqual(off_net, which_network_type(<<"NID2">>, Tab)),
+    ?assertEqual(int_net, which_network_type(<<"NID3">>, Tab)).
+
+which_network_type_2_test() ->
+    [N | Ns] = networks(),
+    Networks = [N#network_dto{is_home = true} | Ns],
+    Tab = ets:new(map, [ordered_set]),
+    fill_network_type_tab(Networks, Tab),
+    ?assertEqual(on_net, which_network_type(<<"NID1">>, Tab)),
+    ?assertEqual(off_net, which_network_type(<<"NID2">>, Tab)),
+    ?assertEqual(int_net, which_network_type(<<"NID3">>, Tab)).
 
 to_international_1_test() ->
     Addr = #addr{addr = <<"+999111111111">>},
