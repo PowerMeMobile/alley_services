@@ -250,24 +250,37 @@ calc_sms_price(Network, ProviderId2SmsAddPoints) ->
 
 -ifdef(TEST).
 
-fill_coverage(DefaultProviderId) ->
-    ok = application:set_env(?APP, country_code, <<"999">>),
-    ok = application:set_env(?APP, strip_leading_zero, false),
+networks() ->
     Network1 = #network_dto{
         id = <<"NID1">>,
         country_code = <<"999">>,
         number_len = 12,
         prefixes = [<<"01">>, <<"02">>],
-        provider_id = <<"PID1">>
+        provider_id = <<"PID1">>,
+        is_home = true
     },
     Network2 = #network_dto{
         id = <<"NID2">>,
+        country_code = <<"999">>,
+        number_len = 0,
+        prefixes = [<<"03">>, <<"04">>],
+        provider_id = <<"PID2">>,
+        is_home = false
+    },
+    Network3 = #network_dto{
+        id = <<"NID3">>,
         country_code = <<"998">>,
         number_len = 0,
-        prefixes = [<<"01">>, <<"02">>],
-        provider_id = <<"PID2">>
+        prefixes = [<<"0">>, <<"1">>, <<"2">>],
+        provider_id = <<"PID3">>,
+        is_home = false
     },
-    Networks = [Network1, Network2],
+    [Network1, Network2, Network3].
+
+fill_coverage(DefaultProviderId) ->
+    ok = application:set_env(?APP, country_code, <<"999">>),
+    ok = application:set_env(?APP, strip_leading_zero, false),
+    Networks = networks(),
     Tab = ets:new(coverage, [ordered_set]),
     fill_coverage_tab(Networks, DefaultProviderId, Tab),
     Tab.
@@ -275,23 +288,29 @@ fill_coverage(DefaultProviderId) ->
 fill_coverage_tab_undef_def_prov_id_test() ->
     Tab = fill_coverage(undefined),
     Expected = [
-        {prefix_lens, [5]},
-        {<<"99801">>,  0, <<"NID2">>, <<"PID2">>},
-        {<<"99802">>,  0, <<"NID2">>, <<"PID2">>},
+        {prefix_lens, [4, 5]},
+        {<<"9980">>, 0, <<"NID3">>, <<"PID3">>},
+        {<<"9981">>, 0, <<"NID3">>, <<"PID3">>},
+        {<<"9982">>, 0, <<"NID3">>, <<"PID3">>},
         {<<"99901">>, 12, <<"NID1">>, <<"PID1">>},
-        {<<"99902">>, 12, <<"NID1">>, <<"PID1">>}
+        {<<"99902">>, 12, <<"NID1">>, <<"PID1">>},
+        {<<"99903">>,  0, <<"NID2">>, <<"PID2">>},
+        {<<"99904">>,  0, <<"NID2">>, <<"PID2">>}
     ],
     Actual = ets:tab2list(Tab),
     ?assertEqual(Expected, Actual).
 
 fill_coverage_tab_def_def_prov_id_test() ->
-    Tab = fill_coverage(<<"PID3">>),
+    Tab = fill_coverage(<<"PID4">>),
     Expected = [
-        {prefix_lens, [5]},
-        {<<"99801">>,  0, <<"NID2">>, <<"PID3">>},
-        {<<"99802">>,  0, <<"NID2">>, <<"PID3">>},
-        {<<"99901">>, 12, <<"NID1">>, <<"PID3">>},
-        {<<"99902">>, 12, <<"NID1">>, <<"PID3">>}
+        {prefix_lens, [4, 5]},
+        {<<"9980">>, 0, <<"NID3">>, <<"PID4">>},
+        {<<"9981">>, 0, <<"NID3">>, <<"PID4">>},
+        {<<"9982">>, 0, <<"NID3">>, <<"PID4">>},
+        {<<"99901">>, 12, <<"NID1">>, <<"PID4">>},
+        {<<"99902">>, 12, <<"NID1">>, <<"PID4">>},
+        {<<"99903">>,  0, <<"NID2">>, <<"PID4">>},
+        {<<"99904">>,  0, <<"NID2">>, <<"PID4">>}
     ],
     Actual = ets:tab2list(Tab),
     ?assertEqual(Expected, Actual).
@@ -306,8 +325,8 @@ which_network_international_number_success_test() ->
 
 which_network_with_zero_number_len_success_test() ->
     Tab = fill_coverage(undefined),
-    Addr = #addr{addr = <<"9980200000">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
-    Addr2 = #addr{addr = <<"9980200000">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
+    Addr = #addr{addr = <<"9990300000">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
+    Addr2 = #addr{addr = <<"9990300000">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
     Expected = {<<"NID2">>, Addr2, <<"PID2">>},
     Actual = which_network(Addr, Tab),
     ?assertEqual(Expected, Actual).
