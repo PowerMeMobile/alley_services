@@ -8,6 +8,7 @@
         rmql,
         gproc,
         gsm0338,
+        libuuid,
         alley_common,
         billy_client
     ]},
