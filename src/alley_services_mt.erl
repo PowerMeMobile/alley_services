@@ -158,11 +158,20 @@ send(authenticate, Req) ->
     case alley_services_auth:authenticate(CustomerId, UserName, ClientType, Password) of
         {ok, #k1api_auth_response_dto{result = {customer, Customer}}} ->
             Req2 = Req#send_req{customer = Customer},
-            send(fill_coverage_tab, Req2);
+            send(parse_def_date, Req2);
         {ok, #k1api_auth_response_dto{result = {error, Error}}} ->
             {ok, [{result, Error}]};
         {error, timeout} ->
             {ok, [{result, ?authError}]}
+    end;
+
+send(parse_def_date, Req) ->
+    DefDate = Req#send_req.def_date,
+    case parse_def_date(DefDate) of
+        {error, invalid} ->
+            {ok, [{result, ?invalidDefDateFormatError}]};
+        {ok, ParsedDefDate} ->
+            send(fill_coverage_tab, Req#send_req{def_date = ParsedDefDate})
     end;
 
 send(fill_coverage_tab, Req) ->
@@ -171,30 +180,15 @@ send(fill_coverage_tab, Req) ->
     DefaultProviderId = Customer#k1api_auth_response_customer_dto.default_provider_id,
     CoverageTab = ets:new(coverage_tab, [private]),
     alley_services_coverage:fill_coverage_tab(Networks, DefaultProviderId, CoverageTab),
-    send(parse_recipients, Req#send_req{coverage_tab = CoverageTab});
-
-send(parse_recipients, Req) ->
-    BlobRecipients = Req#send_req.recipients,
-    RawRecipients = binary:split(BlobRecipients, <<",">>, [trim, global]),
-    DestAddrs = [alley_services_utils:addr_to_dto(Addr) || Addr <- RawRecipients],
-    send(parse_def_date, Req#send_req{recipients = DestAddrs});
-
-send(parse_def_date, Req) ->
-    DefDate = Req#send_req.def_date,
-    case parse_def_date(DefDate) of
-        {error, invalid} ->
-            {ok, [{result, ?invalidDefDateFormatError}]};
-        {ok, ParsedDefDate} ->
-            send(check_originator, Req#send_req{def_date = ParsedDefDate})
-    end;
+    send(check_originator, Req#send_req{coverage_tab = CoverageTab});
 
 send(check_originator, Req) ->
     Customer = Req#send_req.customer,
-    Originator = alley_services_utils:addr_to_dto(Req#send_req.originator),
+    Originator = Req#send_req.originator,
     AllowedSources = Customer#k1api_auth_response_customer_dto.allowed_sources,
     case lists:member(Originator, AllowedSources) of
         true ->
-            send(check_blacklist, Req#send_req{originator = Originator});
+            send(check_blacklist, Req);
         false ->
             {ok, [{result, ?originatorNotAllowedError}]}
     end;
