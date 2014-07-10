@@ -6,6 +6,8 @@
         kernel,
         stdlib,
         rmql,
+        gproc,
+        gsm0338,
         alley_common,
         billy_client
     ]},
