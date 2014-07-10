@@ -354,7 +354,7 @@ send(request_credit, Req) ->
     end;
 
 send(billy_reserve, Req) ->
-    {ok, SessionId} = mm_srv_billy_session:get_session_id(),
+    {ok, SessionId} = alley_services_billy_session:get_session_id(),
     Customer = Req#send_req.customer,
     CustomerUuid = Customer#k1api_auth_response_customer_dto.uuid,
     UserId = Req#send_req.user_name,

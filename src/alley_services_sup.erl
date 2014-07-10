@@ -12,7 +12,7 @@
 
 -include_lib("alley_common/include/supervisor_spec.hrl").
 
--define(CHILD(I, Timeout, Type), {I, {I, start_link, []}, permanent, Timeout, Type, [I]}).
+-define(CHILD(I, Restart, Timeout, Type), {I, {I, start_link, []}, Restart, Timeout, Type, [I]}).
 
 -spec start_link() -> {ok, pid()}.
 start_link() ->
@@ -24,15 +24,16 @@ start_link() ->
 
 init([]) ->
     {ok, {{one_for_one, 5, 10}, [
-        ?CHILD(alley_services_pdu_logger_sup, infinity, supervisor),
-        ?CHILD(alley_services_http_in_logger, 5000, worker),
-        ?CHILD(alley_services_http_out_logger, 5000, worker),
-        ?CHILD(alley_services_auth_cache, 5000, worker),
-        ?CHILD(alley_services_auth, 5000, worker),
-        ?CHILD(alley_services_api, 5000, worker),
-        ?CHILD(alley_services_blacklist, 5000, worker),
-        ?CHILD(alley_services_events, 5000, worker),
-        ?CHILD(alley_services_defer, 5000, worker),
-        ?CHILD(alley_services_mo, 5000, worker),
-        ?CHILD(alley_services_mt, 5000, worker)
+        ?CHILD(alley_services_pdu_logger_sup, permanent, infinity, supervisor),
+        ?CHILD(alley_services_billy_session, transient, 5000, worker),
+        ?CHILD(alley_services_http_in_logger, permanent, 5000, worker),
+        ?CHILD(alley_services_http_out_logger, permanent, 5000, worker),
+        ?CHILD(alley_services_auth_cache, permanent, 5000, worker),
+        ?CHILD(alley_services_auth, permanent, 5000, worker),
+        ?CHILD(alley_services_api, permanent, 5000, worker),
+        ?CHILD(alley_services_blacklist, permanent, 5000, worker),
+        ?CHILD(alley_services_events, permanent, 5000, worker),
+        ?CHILD(alley_services_defer, permanent, 5000, worker),
+        ?CHILD(alley_services_mo, permanent, 5000, worker),
+        ?CHILD(alley_services_mt, permanent, 5000, worker)
     ]}}.

@@ -6,7 +6,8 @@
         kernel,
         stdlib,
         rmql,
-        alley_common
+        alley_common,
+        billy_client
     ]},
     {mod, {alley_services_app, []}},
     {env, []}
