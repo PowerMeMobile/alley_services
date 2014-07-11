@@ -20,7 +20,7 @@
     type         :: undefined | binary(),
     def_date     :: undefined | binary(),
     flash        :: undefined | boolean(),
-    smpp_params  :: undefined | term(),
+    smpp_params = [] :: [{binary(), binary() | boolean() | integer()}],
     encoding     :: undefined | default | ucs2,
     encoded      :: undefined | binary(),
     coverage_tab :: undefined | ets:tid(),

@@ -29,18 +29,6 @@
 -include_lib("amqp_client/include/amqp_client.hrl").
 -include_lib("billy_client/include/billy_client.hrl").
 
--define(just_sms_request_param(Name, Param),
-    apply(fun
-        (undefined) ->
-            [];
-        (Str) when is_binary(Str) ; is_list(Str) ->
-            {just_sms_request_param_dto, Name, {string, Str}};
-        (Bool) when Bool =:= true ; Bool =:= false ->
-            {just_sms_request_param_dto, Name, {boolean, Bool}};
-        (Int) when is_integer(Int) ->
-            {just_sms_request_param_dto, Name, {integer, Int}}
-    end, [Param])).
-
 -record(unconfirmed, {
     id      :: integer(),
     from    :: term()
@@ -250,7 +238,11 @@ send(process_msg_type, Req) when
         Req#send_req.text =:= undefined andalso
         Req#send_req.action =:= send_binary_sms ->
     Text = ac_hexdump:hexdump_to_binary(Req#send_req.binary_body),
-    send(define_smpp_params, Req#send_req{text = Text, encoding = default, encoded = <<" ">>});
+    send(define_smpp_params, Req#send_req{
+        text = Text,
+        encoding = default,
+        encoded = <<" ">>
+    });
 
 send(process_msg_type, Req) ->
     Text = convert_numbers(Req#send_req.text, Req#send_req.type),
@@ -262,25 +254,28 @@ send(define_text_encoding, Req) ->
             {valid, Binary} -> {default, Binary};
             {invalid, Binary} -> {ucs2, Binary}
         end,
-    send(define_smpp_params, Req#send_req{encoding = Encoding, encoded = Encoded});
+    send(define_smpp_params, Req#send_req{
+        encoding = Encoding,
+        encoded = Encoded
+    });
 
 send(define_smpp_params, Req) when Req#send_req.action =:= send_service_sms ->
     Customer = Req#send_req.customer,
     ReceiptsAllowed = Customer#k1api_auth_response_customer_dto.receipts_allowed,
     NoRetry = Customer#k1api_auth_response_customer_dto.no_retry,
     DefaultValidity = Customer#k1api_auth_response_customer_dto.default_validity,
-    Params = lists:flatten([
-        ?just_sms_request_param(<<"registered_delivery">>, ReceiptsAllowed),
-        ?just_sms_request_param(<<"service_type">>, <<>>),
-        ?just_sms_request_param(<<"no_retry">>, NoRetry),
-        ?just_sms_request_param(<<"validity_period">>, fmt_validity(DefaultValidity)),
-        ?just_sms_request_param(<<"priority_flag">>, 0),
-        ?just_sms_request_param(<<"esm_class">>, 64),
-        ?just_sms_request_param(<<"protocol_id">>, 0),
-        ?just_sms_request_param(<<"data_coding">>, 245),
-        ?just_sms_request_param(<<"source_port">>, 9200),
-        ?just_sms_request_param(<<"destination_port">>, 2948)
-    ]),
+    Params = Req#send_req.smpp_params ++ [
+        {<<"registered_delivery">>, ReceiptsAllowed},
+        {<<"service_type">>, <<>>},
+        {<<"no_retry">>, NoRetry},
+        {<<"validity_period">>, fmt_validity(DefaultValidity)},
+        {<<"priority_flag">>, 0},
+        {<<"esm_class">>, 64},
+        {<<"protocol_id">>, 0},
+        {<<"data_coding">>, 245},
+        {<<"source_port">>, 9200},
+        {<<"destination_port">>, 2948}
+    ],
     send(check_billing, Req#send_req{smpp_params = Params});
 
 send(define_smpp_params, Req) when Req#send_req.action =:= send_binary_sms ->
@@ -291,16 +286,16 @@ send(define_smpp_params, Req) when Req#send_req.action =:= send_binary_sms ->
     DC = maybe_binary_to_integer(Req#send_req.data_coding),
     ESMClass = maybe_binary_to_integer(Req#send_req.esm_class),
     ProtocolId = maybe_binary_to_integer(Req#send_req.protocol_id),
-    Params = lists:flatten([
-        ?just_sms_request_param(<<"registered_delivery">>, ReceiptsAllowed),
-        ?just_sms_request_param(<<"service_type">>, <<>>),
-        ?just_sms_request_param(<<"no_retry">>, NoRetry),
-        ?just_sms_request_param(<<"validity_period">>, fmt_validity(DefaultValidity)),
-        ?just_sms_request_param(<<"priority_flag">>, 0),
-        ?just_sms_request_param(<<"data_coding">>, DC),
-        ?just_sms_request_param(<<"esm_class">>, ESMClass),
-        ?just_sms_request_param(<<"protocol_id">>, ProtocolId)
-     ]),
+    Params = Req#send_req.smpp_params ++ [
+        {<<"registered_delivery">>, ReceiptsAllowed},
+        {<<"service_type">>, <<>>},
+        {<<"no_retry">>, NoRetry},
+        {<<"validity_period">>, fmt_validity(DefaultValidity)},
+        {<<"priority_flag">>, 0},
+        {<<"data_coding">>, DC},
+        {<<"esm_class">>, ESMClass},
+        {<<"protocol_id">>, ProtocolId}
+    ],
     send(check_billing, Req#send_req{smpp_params = Params});
 
 send(define_smpp_params, Req) ->
@@ -309,15 +304,15 @@ send(define_smpp_params, Req) ->
     ReceiptsAllowed = Customer#k1api_auth_response_customer_dto.receipts_allowed,
     NoRetry = Customer#k1api_auth_response_customer_dto.no_retry,
     DefaultValidity = Customer#k1api_auth_response_customer_dto.default_validity,
-    Params = lists:flatten([
-        ?just_sms_request_param(<<"registered_delivery">>, ReceiptsAllowed),
-        ?just_sms_request_param(<<"service_type">>, <<>>),
-        ?just_sms_request_param(<<"no_retry">>, NoRetry),
-        ?just_sms_request_param(<<"validity_period">>, fmt_validity(DefaultValidity)),
-        ?just_sms_request_param(<<"priority_flag">>, 0),
-        ?just_sms_request_param(<<"esm_class">>, 3),
-        ?just_sms_request_param(<<"protocol_id">>, 0)
-    ]) ++ flash(Req#send_req.flash, Encoding),
+    Params = Req#send_req.smpp_params ++ flash(Req#send_req.flash, Encoding) ++ [
+        {<<"registered_delivery">>, ReceiptsAllowed},
+        {<<"service_type">>, <<>>},
+        {<<"no_retry">>, NoRetry},
+        {<<"validity_period">>, fmt_validity(DefaultValidity)},
+        {<<"priority_flag">>, 0},
+        {<<"esm_class">>, 3},
+        {<<"protocol_id">>, 0}
+    ],
     send(check_billing, Req#send_req{smpp_params = Params});
 
 send(check_billing, Req) ->
@@ -476,9 +471,9 @@ setup_chan(St = #st{}) ->
 flash(false, _) ->
     [];
 flash(true, default) ->
-    [?just_sms_request_param(<<"data_coding">>, 240)];
+    [{<<"data_coding">>, 240}];
 flash(true, ucs2) ->
-    [?just_sms_request_param(<<"data_coding">>, 248)].
+    [{<<"data_coding">>, 248}].
 
 build_req_dto(ReqId, GatewayId, DestAddrs, Req) ->
     Customer   = Req#send_req.customer,
@@ -490,6 +485,7 @@ build_req_dto(ReqId, GatewayId, DestAddrs, Req) ->
     NumberOfDests = length(DestAddrs),
     NumberOfParts = alley_services_utils:calc_parts_number(NumberOfSymbols, Encoding),
     MessageIds = get_ids(CustomerId, UserId, NumberOfDests, NumberOfParts),
+    Params = wrap_params(Req#send_req.smpp_params),
 
     #just_sms_request_dto{
         id = ReqId,
@@ -500,7 +496,7 @@ build_req_dto(ReqId, GatewayId, DestAddrs, Req) ->
         type = regular,
         message = Req#send_req.text,
         encoding = Encoding,
-        params = Req#send_req.smpp_params,
+        params = Params,
         source_addr = Req#send_req.originator,
         dest_addrs = {regular, DestAddrs},
         message_ids = MessageIds
@@ -518,6 +514,17 @@ get_ids(CustomerId, UserId, NumberOfDests, Parts) ->
                   {Acc, [integer_to_list(Id) | Group]}
           end, {[], []}, Ids),
     DTOIds.
+
+wrap_params(Params) ->
+    Tag = fun
+        (Str) when is_binary(Str) ->
+            {string, Str};
+        (Bool) when Bool =:= true; Bool =:= false ->
+            {boolean, Bool};
+        (Int) when is_integer(Int) ->
+            {integer, Int}
+    end,
+    [#just_sms_request_param_dto{name = N, value = Tag(V)} || {N, V} <- Params].
 
 fmt_validity(SecondsTotal) ->
     MinutesTotal = SecondsTotal div 60,
