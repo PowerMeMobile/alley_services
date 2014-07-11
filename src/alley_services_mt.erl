@@ -519,7 +519,7 @@ wrap_params(Params) ->
     Tag = fun
         (Str) when is_binary(Str) ->
             {string, Str};
-        (Bool) when Bool =:= true; Bool =:= false ->
+        (Bool) when is_boolean(Bool) ->
             {boolean, Bool};
         (Int) when is_integer(Int) ->
             {integer, Int}
