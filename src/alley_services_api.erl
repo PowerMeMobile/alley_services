@@ -17,7 +17,9 @@
     subscribe_incoming_sms/8,
     unsubscribe_incoming_sms/4,
     subscribe_sms_receipts/6,
-    unsubscribe_sms_receipts/4
+    unsubscribe_sms_receipts/4,
+
+    process_inbox/4
 ]).
 
 -include("application.hrl").
@@ -302,5 +304,37 @@ unsubscribe_sms_receipts(ReqId, CustomerId, UserId, SubscriptionId) ->
             end;
         {error, timeout} ->
             ?log_error("Unsubscribe sms receipts response: timeout", []),
+            {error, timeout}
+    end.
+
+-type inbox_operation() :: list_all | list_new
+                         | fetch_all | fetch_new | fetch_id
+                         | kill_all | kill_old | kill_id.
+-type message_ids()     :: [binary()].
+-spec process_inbox(customer_id(), user_id(), inbox_operation(), message_ids()) ->
+    {ok, #k1api_process_inbox_response_dto{}} | {error, term()}.
+process_inbox(CustomerId, UserId, Operation, MessageIds) ->
+    ReqId = uuid:unparse(uuid:generate_time()),
+    Req = #k1api_process_inbox_request_dto{
+        id = ReqId,
+        customer_id = CustomerId,
+        user_id = UserId,
+        operation = Operation,
+        message_ids = MessageIds
+    },
+    ?log_debug("Sending process inbox request: ~p", [Req]),
+    {ok, ReqBin} = adto:encode(Req),
+    case rmql_rpc_client:call(?MODULE, ReqBin, <<"ProcessInboxReq">>) of
+        {ok, RespBin} ->
+            case adto:decode(#k1api_process_inbox_response_dto{}, RespBin) of
+                {ok, Resp} ->
+                    ?log_debug("Got process inbox response: ~p", [Resp]),
+                    {ok, Resp};
+                {error, Error} ->
+                    ?log_error("Process inbox response decode error: ~p", [Error]),
+                    {error, Error}
+            end;
+        {error, timeout} ->
+            ?log_error("Process inbox response: timeout", []),
             {error, timeout}
     end.
