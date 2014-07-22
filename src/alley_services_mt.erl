@@ -234,6 +234,12 @@ send(process_msg_type, Req) when
 
 send(process_msg_type, Req) when
         Req#send_req.text =:= undefined andalso
+        Req#send_req.binary_body =:= undefined andalso
+        Req#send_req.action =:= send_binary_sms ->
+    {ok, #send_result{result = no_message_body}};
+
+send(process_msg_type, Req) when
+        Req#send_req.text =:= undefined andalso
         Req#send_req.action =:= send_binary_sms ->
     Text = ac_hexdump:hexdump_to_binary(Req#send_req.binary_body),
     send(define_smpp_params, Req#send_req{
