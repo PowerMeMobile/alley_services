@@ -57,7 +57,7 @@ start_link() ->
 
 -spec send(#send_req{}) -> {ok, [{K::atom(), V::any()}]}.
 send(Req) ->
-    send(authenticate, Req).
+    send(parse_def_date, Req).
 
 -spec publish({publish_action(), payload(), req_id(), gateway_id()}) -> ok.
 publish(Req) ->
@@ -137,21 +137,6 @@ code_change(_OldVsn, St, _Extra) ->
 %% ===================================================================
 %% Send steps
 %% ===================================================================
-
-send(authenticate, Req) ->
-    CustomerId = Req#send_req.customer_id,
-    UserName = Req#send_req.user_name,
-    ClientType = Req#send_req.client_type,
-    Password = Req#send_req.password,
-    case alley_services_auth:authenticate(CustomerId, UserName, ClientType, Password) of
-        {ok, #k1api_auth_response_dto{result = {customer, Customer}}} ->
-            Req2 = Req#send_req{customer = Customer},
-            send(parse_def_date, Req2);
-        {ok, #k1api_auth_response_dto{result = {error, Error}}} ->
-            {ok, [{result, Error}]};
-        {error, timeout} ->
-            {ok, [{result, ?authError}]}
-    end;
 
 send(parse_def_date, Req) ->
     DefDate = Req#send_req.def_date,
