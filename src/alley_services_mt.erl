@@ -142,7 +142,7 @@ send(parse_def_date, Req) ->
     DefDate = Req#send_req.def_date,
     case parse_def_date(DefDate) of
         {error, invalid} ->
-            {ok, [{result, ?invalidDefDateFormatError}]};
+            {ok, #send_result{result = invalid_def_date}};
         {ok, ParsedDefDate} ->
             send(fill_coverage_tab, Req#send_req{def_date = ParsedDefDate})
     end;
@@ -161,9 +161,17 @@ send(check_originator, Req) ->
     AllowedSources = Customer#k1api_auth_response_customer_dto.allowed_sources,
     case lists:member(Originator, AllowedSources) of
         true ->
-            send(check_blacklist, Req);
+            send(check_recipients, Req);
         false ->
-            {ok, [{result, ?originatorNotAllowedError}]}
+            {ok, #send_result{result = originator_not_found}}
+    end;
+
+send(check_recipients, Req) ->
+    case Req#send_req.recipients of
+        [] ->
+            {ok, #send_result{result = no_recipients}};
+        [_|_] ->
+            send(check_blacklist, Req)
     end;
 
 send(check_blacklist, Req) ->
@@ -171,7 +179,7 @@ send(check_blacklist, Req) ->
     Originator = Req#send_req.originator,
     case alley_services_blacklist:filter(DestAddrs, Originator) of
         {[], _} ->
-            {ok, [{result, ?noAnyDestAddrError}]};
+            {ok, #send_result{result = no_dest_addrs}};
         {Allowed, Blacklisted} ->
             send(route_to_providers, Req#send_req{
                 recipients = Allowed,
@@ -184,7 +192,7 @@ send(route_to_providers, Req) ->
     CoverageTab = Req#send_req.coverage_tab,
     case alley_services_coverage:route_addrs_to_providers(DestAddrs, CoverageTab) of
         {[], _} ->
-            {ok, [{result, ?noAnyDestAddrError}]};
+            {ok, #send_result{result = no_dest_addrs}};
         {ProvId2Addrs, UnroutableToProviders} ->
             send(route_to_gateways, Req#send_req{
                 routable = ProvId2Addrs,
@@ -198,13 +206,18 @@ send(route_to_gateways, Req) ->
     Providers = Customer#k1api_auth_response_customer_dto.providers,
     case alley_services_coverage:route_addrs_to_gateways(DestAddrs, Providers) of
         {[], _} ->
-            {ok, [{result, ?noAnyDestAddrError}]};
+            {ok, #send_result{result = no_dest_addrs}};
         {GtwId2Addrs, UnroutableToGateways} ->
             send(process_msg_type, Req#send_req{
                 routable = GtwId2Addrs,
                 rejected = Req#send_req.rejected ++ UnroutableToGateways
             })
     end;
+
+send(process_msg_type, Req) when
+        Req#send_req.text =:= undefined andalso
+        Req#send_req.action =:= send_sms ->
+    {ok, #send_result{result = no_message_body}};
 
 send(process_msg_type, Req) when
         Req#send_req.text =:= undefined andalso
@@ -216,7 +229,7 @@ send(process_msg_type, Req) when
             Text = <<"<%SERVICEMESSAGE:", Name/binary, ";", Url/binary, "%>">>,
             send(process_msg_type, Req#send_req{text = Text});
         false ->
-            {ok, [{result, ?serviceNameAndUrlExpected}]}
+            {ok, #send_result{result = bad_service_name_or_url}}
     end;
 
 send(process_msg_type, Req) when
@@ -322,9 +335,9 @@ send(request_credit, Req) ->
         {denied, CreditLeft} ->
             ?log_error("Sending denied. CustomerId: ~p, credit left: ~p",
                 [CustomerId, CreditLeft]),
-            {ok, [{result, ?postpaidCreditLimitExceeded}]};
+            {ok, #send_result{result = credit_limit_exceeded}};
         {error, timeout} ->
-            {ok, [{result, ?serverUnreachable}]}
+            {ok, #send_result{result = timeout}}
     end;
 
 send(billy_reserve, Req) ->
@@ -332,10 +345,11 @@ send(billy_reserve, Req) ->
     Customer = Req#send_req.customer,
     CustomerUuid = Customer#k1api_auth_response_customer_dto.uuid,
     UserId = Req#send_req.user_name,
+    ClientType = Req#send_req.client_type,
     ServiceRequest = build_billy_service_request(Req),
     ?log_debug("Prepaid CustomerUuid: ~p, UserId: ~p, service request: ~p",
         [CustomerUuid, UserId, ServiceRequest]),
-    case billy_client:reserve(SessionId, ?CLIENT_TYPE_MM,
+    case billy_client:reserve(SessionId, atom_to_binary(ClientType, utf8),
             CustomerUuid, UserId, ServiceRequest) of
         {accepted, TransactionId} ->
             ?log_debug("Sending allowed", []),
@@ -351,7 +365,7 @@ send(billy_reserve, Req) ->
             {ok, Reply};
         {rejected, Reason} ->
             ?log_error("Sending denied by Billy with: ~p", [Reason]),
-            {ok, [{result, atom_to_binary(Reason, utf8)}]}
+            {ok, #send_result{result = Reason}}
     end;
 
 send(build_req_dto_s, Req) ->
@@ -397,7 +411,11 @@ send(publish_dto_s, Req) ->
         ReqDTOs
     ),
 
-    {ok, [{id, ReqId}, {rejected, Req#send_req.rejected}]}.
+    {ok, #send_result{
+        result = ok,
+        req_id = ReqId,
+        rejected = Req#send_req.rejected
+    }}.
 
 %% ===================================================================
 %% Public Confirms

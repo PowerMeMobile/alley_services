@@ -15,7 +15,7 @@
     client_type  :: atom(),
     password     :: undefined | binary(),
     originator   :: undefined | binary(),
-    recipients   :: undefined | binary(),
+    recipients   :: [#addr{}],
     text         :: undefined | binary(),
     type         :: undefined | binary(),
     def_date     :: undefined | binary(),
@@ -37,6 +37,12 @@
     data_coding  :: undefined | binary(),
     esm_class    :: undefined | binary(),
     protocol_id  :: undefined | binary()
+}).
+
+-record(send_result, {
+    result       :: undefined | atom(),
+    req_id       :: undefined | binary(),
+    rejected     :: undefined | list()
 }).
 
 -define(serverUnreachable, <<"Server cannot be reached">>).
