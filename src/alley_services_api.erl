@@ -98,7 +98,11 @@ get_blacklist() ->
     end.
 
 -spec get_delivery_status(customer_id(), user_id(), request_id(), src_addr()) ->
-    {ok, [#k1api_sms_delivery_status_response_dto{}]} | {error, timeout}.
+    {ok, [#k1api_sms_delivery_status_response_dto{}]} | {error, term()}.
+get_delivery_status(_CustomerId, _UserId, undefined, _SenderAddr) ->
+    {error, empty_request_id};
+get_delivery_status(_CustomerId, _UserId, <<"">>, _SenderAddr) ->
+    {error, empty_request_id};
 get_delivery_status(CustomerId, UserId, SmsReqId, SenderAddr) ->
     ReqId = uuid:unparse(uuid:generate_time()),
     Req = #k1api_sms_delivery_status_request_dto{
@@ -113,6 +117,10 @@ get_delivery_status(CustomerId, UserId, SmsReqId, SenderAddr) ->
     case rmql_rpc_client:call(?MODULE, ReqBin, <<"DeliveryStatusReq">>) of
         {ok, RespBin} ->
             case adto:decode(#k1api_sms_delivery_status_response_dto{}, RespBin) of
+                {ok, Resp = #k1api_sms_delivery_status_response_dto{statuses = []}} ->
+                    ?log_debug("Got delivery status response: ~p", [Resp]),
+                    ?log_error("Delivery status response failed with: ~p", [invalid_request_id]),
+                    {error, invalid_request_id};
                 {ok, Resp = #k1api_sms_delivery_status_response_dto{}} ->
                     ?log_debug("Got delivery status response: ~p", [Resp]),
                     {ok, Resp};
