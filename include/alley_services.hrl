@@ -13,7 +13,6 @@
     customer_id  :: undefined | binary(),
     user_name    :: undefined | binary(),
     client_type  :: atom(),
-    password     :: undefined | binary(),
     originator   :: undefined | binary(),
     recipients   :: [#addr{}],
     text         :: undefined | binary(),
