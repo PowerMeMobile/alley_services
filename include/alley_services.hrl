@@ -11,7 +11,7 @@
     action       :: atom(),
     customer     :: undefined | auth_resp(),
     customer_id  :: undefined | binary(),
-    user_name    :: undefined | binary(),
+    user_id      :: undefined | binary(),
     client_type  :: atom(),
     originator   :: undefined | binary(),
     recipients   :: [#addr{}],
