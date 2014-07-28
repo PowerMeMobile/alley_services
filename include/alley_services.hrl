@@ -44,18 +44,6 @@
     rejected     :: undefined | list()
 }).
 
--define(serverUnreachable, <<"Server cannot be reached">>).
--define(authError, <<"Access denied. Check your account settings">>).
--define(originatorNotAllowedError, <<"Specified originator is not allowed">>).
--define(noAnyDestAddrError, <<"None recipient is specified or available due to your permissions">>).
--define(invalidDefDateFormatError,
-        <<"defDate is invalid. defDate format is UTC MM/DD/YYYY HH:MM">>).
--define(postpaidCreditLimitExceeded, <<"Customer's postpaid credit limit is exceeded">>).
--define(prepaidCreditLimitInsufficient, <<"Customer's prepaid credit limit is insufficient">>).
--define(blinkNotSupported, <<"Blink messages are not supported">>).
--define(privateNotSupported, <<"Private messages are not supported">>).
--define(serviceNameAndUrlExpected, <<"Service name and url is expected">>).
-
 -record('DOWN',{
     ref            :: reference(),
     type = process :: process,
