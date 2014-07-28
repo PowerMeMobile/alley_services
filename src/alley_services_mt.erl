@@ -57,7 +57,7 @@ start_link() ->
 
 -spec send(#send_req{}) -> {ok, [{K::atom(), V::any()}]}.
 send(Req) ->
-    send(parse_def_date, Req).
+    send(fill_coverage_tab, Req).
 
 -spec publish({publish_action(), payload(), req_id(), gateway_id()}) -> ok.
 publish(Req) ->
@@ -137,15 +137,6 @@ code_change(_OldVsn, St, _Extra) ->
 %% ===================================================================
 %% Send steps
 %% ===================================================================
-
-send(parse_def_date, Req) ->
-    DefDate = Req#send_req.def_date,
-    case parse_def_date(DefDate) of
-        {error, invalid} ->
-            {ok, #send_result{result = invalid_def_date}};
-        {ok, ParsedDefDate} ->
-            send(fill_coverage_tab, Req#send_req{def_date = ParsedDefDate})
-    end;
 
 send(fill_coverage_tab, Req) ->
     Customer = Req#send_req.customer,
@@ -577,33 +568,6 @@ number_to_arabic(16#0037) -> 16#0667;
 number_to_arabic(16#0038) -> 16#0668;
 number_to_arabic(16#0039) -> 16#0669;
 number_to_arabic(Any) -> Any.
-
-parse_def_date(<<>>) ->
-    {ok, undefined};
-parse_def_date(undefined) ->
-    {ok, undefined};
-parse_def_date(DefDateList) when is_list(DefDateList) ->
-    try [binary_to_integer(D) || D <- DefDateList] of
-        [Month, Day, Year, Hour, Min] ->
-            DateTime = {{Year, Month, Day}, {Hour, Min, 0}},
-            RefDate = ac_datetime:datetime_to_timestamp(DateTime),
-            case RefDate > ac_datetime:utc_timestamp() of
-                true ->
-                    {ok, RefDate};
-                false ->
-                    {error, invalid}
-            end
-    catch
-        _:_ ->
-            {error, invalid}
-    end;
-parse_def_date(DefDate) when is_binary(DefDate) ->
-    case binary:split(DefDate, [<<"/">>, <<" ">>, <<":">>], [global]) of
-        [_M, _D, _Y, _H, _Min] = DefDateList ->
-            parse_def_date(DefDateList);
-        _ ->
-            {error, invalid}
-    end.
 
 is_deferred(undefined) ->
     false;
