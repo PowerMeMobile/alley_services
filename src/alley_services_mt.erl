@@ -348,15 +348,14 @@ send(request_credit, Req) ->
 
 send(billy_reserve, Req) ->
     {ok, SessionId} = alley_services_billy_session:get_session_id(),
-    Customer = Req#send_req.customer,
-    CustomerUuid = Customer#k1api_auth_response_customer_dto.uuid,
+    CustomerId = Req#send_req.customer_id,
     UserId = Req#send_req.user_id,
     ClientType = Req#send_req.client_type,
     ServiceRequest = build_billy_service_request(Req),
-    ?log_debug("Prepaid CustomerUuid: ~p, UserId: ~p, service request: ~p",
-        [CustomerUuid, UserId, ServiceRequest]),
+    ?log_debug("Prepaid CustomerId: ~p, UserId: ~p, service request: ~p",
+        [CustomerId, UserId, ServiceRequest]),
     case billy_client:reserve(SessionId, atom_to_binary(ClientType, utf8),
-            CustomerUuid, UserId, ServiceRequest) of
+            CustomerId, UserId, ServiceRequest) of
         {accepted, TransactionId} ->
             ?log_debug("Sending allowed", []),
             {ok, Reply} = send(build_req_dto_s, Req),
@@ -485,8 +484,7 @@ flash(true, ucs2) ->
     [{<<"data_coding">>, 248}].
 
 build_req_dto(ReqId, GatewayId, DestAddrs, Req) ->
-    Customer   = Req#send_req.customer,
-    CustomerId = Customer#k1api_auth_response_customer_dto.uuid,
+    CustomerId = Req#send_req.customer_id,
     UserId     = Req#send_req.user_id,
     Encoding   = Req#send_req.encoding,
     Encoded    = Req#send_req.encoded,
