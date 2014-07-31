@@ -25,7 +25,7 @@ start_link() ->
     {ok, #k1api_auth_response_dto{}} |
     {error, timeout}.
 authenticate(CustomerId, UserId, Type, Password) ->
-    authenticate(check_cache, CustomerId, UserId, Type, Password).
+    authenticate(request_backend, CustomerId, UserId, Type, Password).
 
 %% ===================================================================
 %% Internal
