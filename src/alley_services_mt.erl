@@ -205,6 +205,8 @@ send(route_to_gateways, Req) ->
             })
     end;
 
+
+%% FIXME: move this logic to clients
 send(process_msg_type, Req) when
         Req#send_req.text =:= undefined andalso
         Req#send_req.action =:= send_sms ->
@@ -223,6 +225,7 @@ send(process_msg_type, Req) when
             {ok, #send_result{result = bad_service_name_or_url}}
     end;
 
+%% FIXME: move this logic to clients
 send(process_msg_type, Req) when
         Req#send_req.text =:= undefined andalso
         Req#send_req.binary_body =:= undefined andalso
@@ -623,7 +626,10 @@ network_id_to_service_type(NetworkId, Tab) ->
             ?SERVICE_TYPE_SMS_INT
     end.
 
+%% FIXME: move this logic to clients
 maybe_binary_to_integer(undefined) ->
+    0;
+maybe_binary_to_integer(<<>>) ->
     0;
 maybe_binary_to_integer(Binary) ->
     binary_to_integer(Binary).
