@@ -48,13 +48,13 @@
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
--spec store(customer_id(), user_id(), type(), password(), record()) -> ok.
+-spec store(customer_id(), user_id(), type(), password(), tuple()) -> ok.
 store(CustomerId, UserId, Type, Password, AuthResp) ->
     Key = {CustomerId, UserId, Type, Password},
     gen_server:call(?MODULE, {store, Key, AuthResp}).
 
 -spec fetch(customer_id(), user_id(), type(), password()) ->
-    {ok, record()} | not_found.
+    {ok, tuple()} | not_found.
 fetch(CustomerId, UserId, Type, Password) ->
     Key = {CustomerId, UserId, Type, Password},
     case dets:lookup(?MODULE, Key) of
@@ -84,7 +84,7 @@ delete(CustomerId, UserId, Type, Password) ->
 %% Service API
 %% ===================================================================
 
--spec fetch_all() -> [{{customer_id(), user_id(), type()}, record()}].
+-spec fetch_all() -> [{{customer_id(), user_id(), type()}, tuple()}].
 fetch_all() ->
     dets:foldl(fun(I, Acc) -> [I | Acc] end, [], ?MODULE).
 
