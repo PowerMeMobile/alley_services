@@ -25,21 +25,35 @@ start_link() ->
     {ok, #k1api_auth_response_dto{}} |
     {error, timeout}.
 authenticate(CustomerId, UserId, Type, Password) ->
-    authenticate(request_backend, CustomerId, UserId, Type, Password).
+    case request_backend(CustomerId, UserId, Type, Password) of
+        {ok, AuthResp = #k1api_auth_response_dto{result = Result}} ->
+            case Result of
+                {customer, _} ->
+                    ok = alley_services_auth_cache:store(
+                        CustomerId, UserId, Type, Password, AuthResp);
+                {error, _} ->
+                    ok
+            end,
+            {ok, AuthResp};
+        {error, timeout} ->
+            ?log_debug("Trying auth cache...", []),
+            case alley_services_auth_cache:fetch(
+                    CustomerId, UserId, Type, Password) of
+                {ok, AuthResp} ->
+                    ?log_debug("Found auth response: ~p", [AuthResp]),
+                    {ok, AuthResp};
+                not_found ->
+                    ?log_error("Not found auth response. "
+                               "Return backend_unavailable", []),
+                    {error, timeout}
+            end
+    end.
 
 %% ===================================================================
 %% Internal
 %% ===================================================================
 
-authenticate(check_cache, CustomerId, UserId, Type, Password) ->
-    case alley_services_auth_cache:fetch(CustomerId, UserId, Type, Password) of
-        {ok, AuthResp} ->
-            {ok, AuthResp};
-        not_found ->
-            authenticate(request_backend, CustomerId, UserId, Type, Password)
-    end;
-
-authenticate(request_backend, CustomerId, UserId, Type, Password) ->
+request_backend(CustomerId, UserId, Type, Password) ->
     ReqId = uuid:unparse(uuid:generate_time()),
     AuthReq = #k1api_auth_request_dto{
         id = ReqId,
@@ -53,20 +67,14 @@ authenticate(request_backend, CustomerId, UserId, Type, Password) ->
     case rmql_rpc_client:call(?MODULE, Payload, <<"OneAPIAuthReq">>) of
         {ok, Bin} ->
             case adto:decode(#k1api_auth_response_dto{}, Bin) of
-                {ok, AuthResp = #k1api_auth_response_dto{result = Result}} ->
+                {ok, AuthResp} ->
                     ?log_debug("Got auth response: ~p", [AuthResp]),
-                    case Result of
-                        {customer, _} ->
-                            ok = alley_services_auth_cache:store(CustomerId, UserId, Type, Password, AuthResp);
-                        {error, _} ->
-                            ok
-                    end,
                     {ok, AuthResp};
                 {error, Error} ->
                     ?log_error("Auth response decode error: ~p", [Error]),
                     {error, Error}
             end;
         {error, timeout} ->
-            ?log_debug("Got auth response: timeout", []),
+            ?log_error("Got auth response: timeout", []),
             {error, timeout}
     end.
