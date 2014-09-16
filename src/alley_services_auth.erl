@@ -43,8 +43,7 @@ authenticate(CustomerId, UserId, Type, Password) ->
                     ?log_debug("Found auth response: ~p", [AuthResp]),
                     {ok, AuthResp};
                 not_found ->
-                    ?log_error("Not found auth response. "
-                               "Return backend_unavailable", []),
+                    ?log_error("Not found auth response.", []),
                     {error, timeout}
             end
     end.
