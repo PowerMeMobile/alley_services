@@ -14,10 +14,10 @@
     retrieve_sms/4,
     request_credit/2,
 
-    subscribe_incoming_sms/8,
-    unsubscribe_incoming_sms/4,
     subscribe_sms_receipts/6,
     unsubscribe_sms_receipts/4,
+    subscribe_incoming_sms/8,
+    unsubscribe_incoming_sms/4,
 
     process_inbox/4
 ]).
@@ -44,7 +44,7 @@ start_link() ->
     rmql_rpc_client:start_link(?MODULE, QueueName).
 
 -spec get_coverage(customer_id(), user_id(), version()) ->
-    {ok, [#k1api_coverage_response_dto{}]} | {error, timeout}.
+    {ok, [#k1api_coverage_response_dto{}]} | {error, term()}.
 get_coverage(CustomerId, UserId, Version) ->
     ReqId = uuid:unparse(uuid:generate_time()),
     Req = #k1api_coverage_request_dto{
@@ -71,7 +71,7 @@ get_coverage(CustomerId, UserId, Version) ->
     end.
 
 -spec get_blacklist() ->
-    {ok, [#k1api_blacklist_response_dto{}]} | {error, timeout}.
+    {ok, [#k1api_blacklist_response_dto{}]} | {error, term()}.
 get_blacklist() ->
     ReqId = uuid:unparse(uuid:generate_time()),
     Req = #k1api_blacklist_request_dto{
@@ -134,7 +134,10 @@ get_delivery_status(CustomerId, UserId, SmsReqId, SenderAddr) ->
     end.
 
 -spec retrieve_sms(customer_id(), user_id(), dst_addr(), pos_integer()) ->
-    {ok, [#k1api_retrieve_sms_response_dto{}]} | {error, timeout}.
+    {ok, [#k1api_retrieve_sms_response_dto{}]} | {error, term()}.
+retrieve_sms(_CustomerId, _UserId, _DestAddr, BatchSize)
+        when is_integer(BatchSize), BatchSize =< 0 ->
+    {error, invalid_bax_match_size};
 retrieve_sms(CustomerId, UserId, DestAddr, BatchSize) ->
     ReqId = uuid:unparse(uuid:generate_time()),
     Req = #k1api_retrieve_sms_request_dto{
@@ -162,7 +165,7 @@ retrieve_sms(CustomerId, UserId, DestAddr, BatchSize) ->
     end.
 
 -spec request_credit(customer_id(), float()) ->
-    {allowed, float()} | {denied, float()} | {error, timeout}.
+    {allowed, float()} | {denied, float()} | {error, term()}.
 request_credit(CustomerId, Credit) ->
     ReqId = uuid:unparse(uuid:generate_time()),
     Req = #k1api_request_credit_request_dto{
@@ -186,6 +189,74 @@ request_credit(CustomerId, Credit) ->
             end;
         {error, timeout} ->
             ?log_error("Got request credit response: timeout", []),
+            {error, timeout}
+    end.
+
+-spec subscribe_sms_receipts(
+    request_id(), customer_id(), user_id(),
+    binary(), src_addr(), binary()
+) ->
+    {#k1api_subscribe_sms_receipts_response_dto{}} | {error, term()}.
+subscribe_sms_receipts(_ReqId, _CustomerId, _UserId,
+    undefined, _SrcAddr, _CallbackData) ->
+    {error, empty_notify_url};
+subscribe_sms_receipts(_ReqId, _CustomerId, _UserId,
+    <<>>, _SrcAddr, _CallbackData) ->
+    {error, empty_notify_url};
+subscribe_sms_receipts(
+    ReqId, CustomerId, UserId,
+    NotifyUrl, SrcAddr, CallbackData
+) ->
+    Req = #k1api_subscribe_sms_receipts_request_dto{
+        id = ReqId,
+        customer_id = CustomerId,
+        user_id = UserId,
+        url = NotifyUrl,
+        dest_addr = SrcAddr, %% Must be SrcAddr
+        callback_data = CallbackData
+    },
+    ?log_debug("Sending subscribe sms receipts request: ~p", [Req]),
+    {ok, ReqBin} = adto:encode(Req),
+    case rmql_rpc_client:call(?MODULE, ReqBin, <<"SubscribeSmsReceiptsReq">>) of
+        {ok, RespBin} ->
+            case adto:decode(#k1api_subscribe_sms_receipts_response_dto{}, RespBin) of
+                {ok, Resp} ->
+                    ?log_debug("Got subscribe sms receipts sms response: ~p", [Resp]),
+                    {ok, Resp};
+                {error, Error} ->
+                    ?log_error("Subscribe sms receipts response decode error: ~p", [Error]),
+                    {error, Error}
+            end;
+        {error, timeout} ->
+            ?log_error("Subscribe sms receipts response: timeout", []),
+            {error, timeout}
+    end.
+
+-spec unsubscribe_sms_receipts(
+    request_id(), customer_id(), user_id(), subscription_id()
+) ->
+    {ok, #k1api_unsubscribe_sms_receipts_response_dto{}} | {error, term()}.
+unsubscribe_sms_receipts(ReqId, CustomerId, UserId, SubscriptionId) ->
+    Req = #k1api_unsubscribe_sms_receipts_request_dto{
+        id = ReqId,
+        customer_id = CustomerId,
+        user_id = UserId,
+        subscription_id = SubscriptionId
+    },
+    ?log_debug("Sending unsubscribe sms receipts request: ~p", [Req]),
+    {ok, ReqBin} = adto:encode(Req),
+    case rmql_rpc_client:call(?MODULE, ReqBin, <<"UnsubscribeSmsReceiptsReq">>) of
+        {ok, RespBin} ->
+            case adto:decode(#k1api_unsubscribe_sms_receipts_response_dto{}, RespBin) of
+                {ok, Resp} ->
+                    ?log_debug("Got unsubscribe sms receipts sms response: ~p", [Resp]),
+                    {ok, Resp};
+                {error, Error} ->
+                    ?log_error("Unsubscribe sms receipts response decode error: ~p", [Error]),
+                    {error, Error}
+            end;
+        {error, timeout} ->
+            ?log_error("Unsubscribe sms receipts response: timeout", []),
             {error, timeout}
     end.
 
@@ -250,68 +321,6 @@ unsubscribe_incoming_sms(ReqId, CustomerId, UserId, SubscriptionId) ->
             end;
         {error, timeout} ->
             ?log_error("Unsubscribe incoming sms response: timeout", []),
-            {error, timeout}
-    end.
-
--spec subscribe_sms_receipts(
-    request_id(), customer_id(), user_id(),
-    binary(), dst_addr(), binary()
-) ->
-    {#k1api_subscribe_sms_receipts_response_dto{}} | {error, term()}.
-subscribe_sms_receipts(
-    ReqId, CustomerId, UserId,
-    NotifyUrl, DestAddr, CallbackData
-) ->
-    Req = #k1api_subscribe_sms_receipts_request_dto{
-        id = ReqId,
-        customer_id = CustomerId,
-        user_id = UserId,
-        url = NotifyUrl,
-        dest_addr = DestAddr,
-        callback_data = CallbackData
-    },
-    ?log_debug("Sending subscribe sms receipts request: ~p", [Req]),
-    {ok, ReqBin} = adto:encode(Req),
-    case rmql_rpc_client:call(?MODULE, ReqBin, <<"SubscribeSmsReceiptsReq">>) of
-        {ok, RespBin} ->
-            case adto:decode(#k1api_subscribe_sms_receipts_response_dto{}, RespBin) of
-                {ok, Resp} ->
-                    ?log_debug("Got subscribe sms receipts sms response: ~p", [Resp]),
-                    {ok, Resp};
-                {error, Error} ->
-                    ?log_error("Subscribe sms receipts response decode error: ~p", [Error]),
-                    {error, Error}
-            end;
-        {error, timeout} ->
-            ?log_error("Subscribe sms receipts response: timeout", []),
-            {error, timeout}
-    end.
-
--spec unsubscribe_sms_receipts(
-    request_id(), customer_id(), user_id(), subscription_id()
-) ->
-    {ok, #k1api_unsubscribe_sms_receipts_response_dto{}} | {error, term()}.
-unsubscribe_sms_receipts(ReqId, CustomerId, UserId, SubscriptionId) ->
-    Req = #k1api_unsubscribe_sms_receipts_request_dto{
-        id = ReqId,
-        customer_id = CustomerId,
-        user_id = UserId,
-        subscription_id = SubscriptionId
-    },
-    ?log_debug("Sending unsubscribe sms receipts request: ~p", [Req]),
-    {ok, ReqBin} = adto:encode(Req),
-    case rmql_rpc_client:call(?MODULE, ReqBin, <<"UnsubscribeSmsReceiptsReq">>) of
-        {ok, RespBin} ->
-            case adto:decode(#k1api_unsubscribe_sms_receipts_response_dto{}, RespBin) of
-                {ok, Resp} ->
-                    ?log_debug("Got unsubscribe sms receipts sms response: ~p", [Resp]),
-                    {ok, Resp};
-                {error, Error} ->
-                    ?log_error("Unsubscribe sms receipts response decode error: ~p", [Error]),
-                    {error, Error}
-            end;
-        {error, timeout} ->
-            ?log_error("Unsubscribe sms receipts response: timeout", []),
             {error, timeout}
     end.
 

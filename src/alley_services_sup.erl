@@ -34,6 +34,6 @@ init([]) ->
         ?CHILD(alley_services_blacklist, permanent, 5000, worker),
         ?CHILD(alley_services_events, permanent, 5000, worker),
         ?CHILD(alley_services_defer, permanent, 5000, worker),
-        ?CHILD(alley_services_mo, permanent, 5000, worker),
+        %%?CHILD(alley_services_mo, permanent, 5000, worker),
         ?CHILD(alley_services_mt, permanent, 5000, worker)
     ]}}.
