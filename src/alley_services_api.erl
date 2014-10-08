@@ -266,6 +266,26 @@ unsubscribe_sms_receipts(ReqId, CustomerId, UserId, SubscriptionId) ->
 ) ->
     {ok, #k1api_subscribe_incoming_sms_response_dto{}} | {error, term()}.
 subscribe_incoming_sms(
+    _ReqId, _CustomerId, _UserId, undefined,
+    _notifyURL, _Criteria, _Correlator, _CallbackData
+) ->
+    {error, empty_dest_addr};
+subscribe_incoming_sms(
+    _ReqId, _CustomerId, _UserId, #addr{addr = <<>>},
+    _notifyURL, _Criteria, _Correlator, _CallbackData
+) ->
+    {error, empty_dest_addr};
+subscribe_incoming_sms(
+    _ReqId, _CustomerId, _UserId, _DestAddr,
+    undefined, _Criteria, _Correlator, _CallbackData
+) ->
+    {error, empty_notify_url};
+subscribe_incoming_sms(
+    _ReqId, _CustomerId, _UserId, _DestAddr,
+    <<>>, _Criteria, _Correlator, _CallbackData
+) ->
+    {error, empty_notify_url};
+subscribe_incoming_sms(
     ReqId, CustomerId, UserId, DestAddr,
     NotifyUrl, Criteria, Correlator, CallbackData
 ) ->
