@@ -336,7 +336,8 @@ fill_coverage_tab_undef_def_prov_id_test() ->
         {<<"99904">>,  0, <<"NID2">>, <<"PID2">>}
     ],
     Actual = ets:tab2list(Tab),
-    ?assertEqual(Expected, Actual).
+    ?assertEqual(Expected, Actual),
+    ets:delete(Tab).
 
 fill_coverage_tab_def_def_prov_id_test() ->
     Tab = fill_coverage(<<"PID4">>),
@@ -351,7 +352,8 @@ fill_coverage_tab_def_def_prov_id_test() ->
         {<<"99904">>,  0, <<"NID2">>, <<"PID4">>}
     ],
     Actual = ets:tab2list(Tab),
-    ?assertEqual(Expected, Actual).
+    ?assertEqual(Expected, Actual),
+    ets:delete(Tab).
 
 which_network_international_number_success_test() ->
     Tab = fill_coverage(undefined),
@@ -359,7 +361,8 @@ which_network_international_number_success_test() ->
     Addr2 = #addr{addr = <<"999020000000">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
     Expected = {<<"NID1">>, Addr2, <<"PID1">>},
     Actual = which_network(Addr, Tab),
-    ?assertEqual(Expected, Actual).
+    ?assertEqual(Expected, Actual),
+    ets:delete(Tab).
 
 which_network_with_zero_number_len_success_test() ->
     Tab = fill_coverage(undefined),
@@ -367,14 +370,16 @@ which_network_with_zero_number_len_success_test() ->
     Addr2 = #addr{addr = <<"9990300000">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
     Expected = {<<"NID2">>, Addr2, <<"PID2">>},
     Actual = which_network(Addr, Tab),
-    ?assertEqual(Expected, Actual).
+    ?assertEqual(Expected, Actual),
+    ets:delete(Tab).
 
 which_network_failure_test() ->
     Tab = fill_coverage(undefined),
     Addr = #addr{addr = <<"997010000000">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
     Expected = undefined,
     Actual = which_network(Addr, Tab),
-    ?assertEqual(Expected, Actual).
+    ?assertEqual(Expected, Actual),
+    ets:delete(Tab).
 
 fill_network_type_tab_1_test() ->
     Networks = networks(),
@@ -385,7 +390,8 @@ fill_network_type_tab_1_test() ->
         {<<"NID2">>, off_net}
     ],
     Actual = ets:tab2list(Tab),
-    ?assertEqual(Expected, Actual).
+    ?assertEqual(Expected, Actual),
+    ets:delete(Tab).
 
 fill_network_type_tab_2_test() ->
     [N | Ns] = networks(),
@@ -397,7 +403,8 @@ fill_network_type_tab_2_test() ->
         {<<"NID2">>, off_net}
     ],
     Actual = ets:tab2list(Tab),
-    ?assertEqual(Expected, Actual).
+    ?assertEqual(Expected, Actual),
+    ets:delete(Tab).
 
 which_network_type_1_test() ->
     Networks = networks(),
@@ -405,7 +412,8 @@ which_network_type_1_test() ->
     fill_network_type_tab(Networks, Tab),
     ?assertEqual(off_net, which_network_type(<<"NID1">>, Tab)),
     ?assertEqual(off_net, which_network_type(<<"NID2">>, Tab)),
-    ?assertEqual(int_net, which_network_type(<<"NID3">>, Tab)).
+    ?assertEqual(int_net, which_network_type(<<"NID3">>, Tab)),
+    ets:delete(Tab).
 
 which_network_type_2_test() ->
     [N | Ns] = networks(),
@@ -414,7 +422,8 @@ which_network_type_2_test() ->
     fill_network_type_tab(Networks, Tab),
     ?assertEqual(on_net, which_network_type(<<"NID1">>, Tab)),
     ?assertEqual(off_net, which_network_type(<<"NID2">>, Tab)),
-    ?assertEqual(int_net, which_network_type(<<"NID3">>, Tab)).
+    ?assertEqual(int_net, which_network_type(<<"NID3">>, Tab)),
+    ets:delete(Tab).
 
 to_international_1_test() ->
     Addr = #addr{addr = <<"+999111111111">>},
