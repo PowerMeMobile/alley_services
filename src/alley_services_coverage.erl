@@ -323,6 +323,13 @@ fill_coverage(DefaultProviderId) ->
     fill_coverage_tab(Networks, DefaultProviderId, Tab),
     Tab.
 
+fill_coverage_tab_empty_tab_test() ->
+    Tab = ets:new(coverage_tab, []),
+    fill_coverage_tab([], undefined, Tab),
+    ?assertEqual(1, ets:info(Tab, size)),
+    ?assertEqual([{prefix_lens, []}], ets:lookup(Tab, prefix_lens)),
+    ets:delete(Tab).
+
 fill_coverage_tab_undef_def_prov_id_test() ->
     Tab = fill_coverage(undefined),
     Expected = [
@@ -355,6 +362,37 @@ fill_coverage_tab_def_def_prov_id_test() ->
     ?assertEqual(Expected, Actual),
     ets:delete(Tab).
 
+fill_coverage_tab_test() ->
+    Networks = [
+        #network_dto{
+            id = <<"b8a55c6d-9ea6-43a8-bf70-b1c34eb4a8fe">>,
+            country_code = <<"444">>,
+            number_len = 12,
+            prefixes = [<<"296">>, <<"293">>],
+            provider_id = <<"123">>
+        },
+        #network_dto{
+            id = <<"d9f043d7-8cb6-4a53-94a8-4789da444f18">>,
+            country_code = <<"555">>,
+            number_len = 13,
+            prefixes = [<<"2311">>, <<"3320">>],
+            provider_id = <<"456">>
+        }
+    ],
+    Tab = ets:new(coverage_tab, []),
+    fill_coverage_tab(Networks, undefined, Tab),
+    ?assertEqual(5, ets:info(Tab, size)),
+    ?assertEqual([{<<"444296">>, 12, <<"b8a55c6d-9ea6-43a8-bf70-b1c34eb4a8fe">>, <<"123">>}],
+                 ets:lookup(Tab, <<"444296">>)),
+    ?assertEqual([{<<"444293">>, 12, <<"b8a55c6d-9ea6-43a8-bf70-b1c34eb4a8fe">>, <<"123">>}],
+                 ets:lookup(Tab, <<"444293">>)),
+    ?assertEqual([{<<"5552311">>, 13, <<"d9f043d7-8cb6-4a53-94a8-4789da444f18">>, <<"456">>}],
+                 ets:lookup(Tab, <<"5552311">>)),
+    ?assertEqual([{<<"5553320">>, 13, <<"d9f043d7-8cb6-4a53-94a8-4789da444f18">>, <<"456">>}],
+                 ets:lookup(Tab, <<"5553320">>)),
+    ?assertEqual([{prefix_lens, [6,7]}], ets:lookup(Tab, prefix_lens)),
+    ets:delete(Tab).
+
 which_network_international_number_success_test() ->
     Tab = fill_coverage(undefined),
     Addr = #addr{addr = <<"999020000000">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
@@ -379,6 +417,68 @@ which_network_failure_test() ->
     Expected = undefined,
     Actual = which_network(Addr, Tab),
     ?assertEqual(Expected, Actual),
+    ets:delete(Tab).
+
+which_network_test() ->
+    ok = application:set_env(?APP, country_code, <<"999">>),
+    ok = application:set_env(?APP, strip_leading_zero, false),
+    Networks = [
+        #network_dto{
+            id = <<"b8a55c6d-9ea6-43a8-bf70-b1c34eb4a8fe">>,
+            country_code = <<"444">>,
+            number_len = 12,
+            prefixes = [<<"296">>, <<"293">>],
+            provider_id = <<"123">>
+        },
+        #network_dto{
+            id = <<"d9f043d7-8cb6-4a53-94a8-4789da444f18">>,
+            country_code = <<"555">>,
+            number_len = 13,
+            prefixes = [<<"2311">>, <<"3320">>],
+            provider_id = <<"456">>
+        },
+        #network_dto{
+            id = <<"06561b4c-d7b2-4cab-b031-af2a90c31491">>,
+            country_code = <<"999">>,
+            number_len = 12,
+            prefixes = [<<"011">>, <<"083">>],
+            provider_id = <<"123">>
+        }
+    ],
+    Tab = ets:new(coverage_tab, []),
+    fill_coverage_tab(Networks, undefined, Tab),
+    ?assertEqual(undefined,
+                 which_network(#addr{addr = <<"44429611347">>, ton = 1, npi = 0}, Tab)),
+    ?assertEqual({<<"b8a55c6d-9ea6-43a8-bf70-b1c34eb4a8fe">>,
+                  #addr{addr = <<"444296113477">>, ton = 1, npi = 1}, <<"123">>},
+                  which_network(#addr{addr = <<"444296113477">>, ton = 1, npi = 0}, Tab)),
+    ?assertEqual({<<"b8a55c6d-9ea6-43a8-bf70-b1c34eb4a8fe">>,
+                  #addr{addr = <<"444293113477">>, ton = 1, npi = 1}, <<"123">>},
+                  which_network(#addr{addr = <<"444293113477">>, ton = 1, npi = 0}, Tab)),
+    ?assertEqual({<<"d9f043d7-8cb6-4a53-94a8-4789da444f18">>,
+                  #addr{addr = <<"5553320123456">>, ton = 1, npi = 1}, <<"456">>},
+                  which_network(#addr{addr = <<"5553320123456">>, ton = 1, npi = 0}, Tab)),
+    ?assertEqual(undefined,
+                 which_network(#addr{addr = <<"011333333">>, ton = 1, npi = 0}, Tab)),
+    ?assertEqual({<<"06561b4c-d7b2-4cab-b031-af2a90c31491">>,
+                  #addr{addr = <<"999083333333">>, ton = 1, npi = 1}, <<"123">>},
+                  which_network(#addr{addr = <<"083333333">>, ton = 2, npi = 0}, Tab)),
+    ?assertEqual({<<"06561b4c-d7b2-4cab-b031-af2a90c31491">>,
+                  #addr{addr = <<"999083333333">>, ton = 1, npi = 1}, <<"123">>},
+                  which_network(#addr{addr = <<"+999083333333">>, ton = 0, npi = 0}, Tab)),
+    ?assertEqual({<<"06561b4c-d7b2-4cab-b031-af2a90c31491">>,
+                  #addr{addr = <<"999083333333">>, ton = 1, npi = 1}, <<"123">>},
+                  which_network(#addr{addr = <<"00999083333333">>, ton = 0, npi = 0}, Tab)),
+    ?assertEqual({<<"06561b4c-d7b2-4cab-b031-af2a90c31491">>,
+                  #addr{addr = <<"999083333333">>, ton = 1, npi = 1}, <<"123">>},
+                  which_network(#addr{addr = <<"+999083333333">>, ton = 1, npi = 0}, Tab)),
+    ?assertEqual({<<"06561b4c-d7b2-4cab-b031-af2a90c31491">>,
+                  #addr{addr = <<"999083333333">>, ton = 1, npi = 1}, <<"123">>},
+                  which_network(#addr{addr = <<"00999083333333">>, ton = 1, npi = 0}, Tab)),
+    %% MAYBE should be a new case
+    %% ?assertEqual({<<"06561b4c-d7b2-4cab-b031-af2a90c31491">>,
+    %%               #addr{addr = <<"999011333333">>, ton = 1, npi = 1}, <<"123">>},
+    %%               which_network(#addr{addr = <<"011333333">>, ton = 0, npi = 0}, Tab)),
     ets:delete(Tab).
 
 fill_network_type_tab_1_test() ->
@@ -464,6 +564,81 @@ to_international_5_test() ->
     Exp = #addr{addr = <<"999111111111">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
     Act = to_international(Addr, StripZero, CountryCode),
     ?assertEqual(Exp, Act).
+
+to_international_international_test() ->
+    Addr1 = #addr{addr = <<"+44 29 675643">>, ton = 1, npi = 1},
+    Exp1 = #addr{addr = <<"4429675643">>, ton = 1, npi = 1},
+    ?assertEqual(Exp1, to_international(Addr1, false, <<"999">>)),
+    Addr2 = #addr{addr = <<"00 44 29 675643">>, ton = 1, npi = 1},
+    Exp2 = #addr{addr = <<"4429675643">>, ton = 1, npi = 1},
+    ?assertEqual(Exp2, to_international(Addr2, false, <<"999">>)),
+    Addr3 = #addr{addr = <<"00 259 675643">>, ton = 0, npi = 1},
+    Exp3 = #addr{addr = <<"259675643">>, ton = 1, npi = 1},
+    ?assertEqual(Exp3, to_international(Addr3, false, <<"222">>)),
+    Addr4 = #addr{addr = <<"+ 344 067 5643">>, ton = 0, npi = 1},
+    Exp4 = #addr{addr = <<"3440675643">>, ton = 1, npi = 1},
+    ?assertEqual(Exp4, to_international(Addr4, false, <<"333">>)).
+
+to_international_other_test() ->
+    Addr1 = #addr{addr = <<"067 5643">>, ton = 0, npi = 1},
+    Exp1 = #addr{addr = <<"0675643">>, ton = 0, npi = 1},
+    ?assertEqual(Exp1, to_international(Addr1, false, <<"999">>)),
+    Addr2 = #addr{addr = <<"067 5643">>, ton = 2, npi = 1},
+    Exp2 = #addr{addr = <<"777675643">>, ton = 1, npi = 1},
+    ?assertEqual(Exp2, to_international(Addr2, true, <<"777">>)).
+
+strip_non_digits_test() ->
+    ?assertEqual(<<"4031888111">>, strip_non_digits(<<"(+40) 31 888-111">>)),
+    ?assertEqual(<<"375296761221">>, strip_non_digits(<<"+375 29 676 1221">>)),
+    ?assertEqual(<<"12345678910">>, strip_non_digits(<<"12345678910">>)).
+
+flatten_networks_wo_default_provider_id_test() ->
+    Networks = [
+        #network_dto{
+            id = <<"b8a55c6d-9ea6-43a8-bf70-b1c34eb4a8fe">>,
+            country_code = <<"444">>,
+            number_len = 12,
+            prefixes = [<<"296">>, <<"293">>],
+            provider_id = <<"123">>
+        },
+        #network_dto{
+            id = <<"d9f043d7-8cb6-4a53-94a8-4789da444f18">>,
+            country_code = <<"555">>,
+            number_len = 13,
+            prefixes = [<<"2311">>, <<"3320">>],
+            provider_id = <<"456">>
+        }
+    ],
+    ?assertEqual([
+        {<<"444293">>, 12, <<"b8a55c6d-9ea6-43a8-bf70-b1c34eb4a8fe">>, <<"123">>},
+        {<<"444296">>, 12, <<"b8a55c6d-9ea6-43a8-bf70-b1c34eb4a8fe">>, <<"123">>},
+        {<<"5552311">>, 13, <<"d9f043d7-8cb6-4a53-94a8-4789da444f18">>, <<"456">>},
+        {<<"5553320">>, 13, <<"d9f043d7-8cb6-4a53-94a8-4789da444f18">>, <<"456">>}
+    ], lists:sort(flatten_networks(Networks, undefined))).
+
+flatten_networks_with_default_provider_id_test() ->
+    Networks = [
+        #network_dto{
+            id = <<"b8a55c6d-9ea6-43a8-bf70-b1c34eb4a8fe">>,
+            country_code = <<"444">>,
+            number_len = 12,
+            prefixes = [<<"296">>, <<"293">>],
+            provider_id = <<"123">>
+        },
+        #network_dto{
+            id = <<"d9f043d7-8cb6-4a53-94a8-4789da444f18">>,
+            country_code = <<"555">>,
+            number_len = 13,
+            prefixes = [<<"2311">>, <<"3320">>],
+            provider_id = <<"456">>
+        }
+    ],
+    ?assertEqual([
+        {<<"444293">>, 12, <<"b8a55c6d-9ea6-43a8-bf70-b1c34eb4a8fe">>, <<"999">>},
+        {<<"444296">>, 12, <<"b8a55c6d-9ea6-43a8-bf70-b1c34eb4a8fe">>, <<"999">>},
+        {<<"5552311">>, 13, <<"d9f043d7-8cb6-4a53-94a8-4789da444f18">>, <<"999">>},
+        {<<"5553320">>, 13, <<"d9f043d7-8cb6-4a53-94a8-4789da444f18">>, <<"999">>}
+    ], lists:sort(flatten_networks(Networks, <<"999">>))).
 
 -endif.
 
