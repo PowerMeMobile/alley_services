@@ -74,7 +74,7 @@ delete(CustomerId, UserId) ->
 
 -spec delete(customer_id(), user_id() | '_', type() | '_') -> ok.
 delete(CustomerId, UserId, Type) ->
-    gen_server:call(?MODULE, {delete, {{CustomerId, UserId, Type, '_'}, '_'}}).
+    delete(CustomerId, UserId, Type, '_').
 
 -spec delete(customer_id(), user_id() | '_', type() | '_', password() | '_') -> ok.
 delete(CustomerId, UserId, Type, Password) ->
