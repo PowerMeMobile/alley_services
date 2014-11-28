@@ -51,7 +51,7 @@ start_link() ->
 -spec store(customer_id(), user_id(), type(), password(), tuple()) -> ok.
 store(CustomerId, UserId, Type, Password, AuthResp) ->
     Key = {CustomerId, UserId, Type, Password},
-    gen_server:call(?MODULE, {store, Key, AuthResp}).
+    gen_server:cast(?MODULE, {store, Key, AuthResp}).
 
 -spec fetch(customer_id(), user_id(), type(), password()) ->
     {ok, tuple()} | not_found.
@@ -78,7 +78,7 @@ delete(CustomerId, UserId, Type) ->
 
 -spec delete(customer_id(), user_id() | '_', type() | '_', password() | '_') -> ok.
 delete(CustomerId, UserId, Type, Password) ->
-    gen_server:call(?MODULE, {delete, {{CustomerId, UserId, Type, Password}, '_'}}).
+    gen_server:cast(?MODULE, {delete, {{CustomerId, UserId, Type, Password}, '_'}}).
 
 %% ===================================================================
 %% Service API
@@ -100,18 +100,18 @@ init([]) ->
     ?log_info("Auth cache: started", []),
     {ok, #st{}}.
 
-handle_call({store, Key, Value}, _From, St) ->
-    ok = dets:insert(?MODULE, {Key, Value}),
-    ok = dets:sync(?MODULE),
-    {reply, ok, St};
-
-handle_call({delete, Pattern}, _From, St) ->
-    ok = dets:match_delete(?MODULE, Pattern),
-    ok = dets:sync(?MODULE),
-    {reply, ok, St};
-
 handle_call(Request, _From, St) ->
     {stop, {unexpected_call, Request}, St}.
+
+handle_cast({store, Key, Value}, St) ->
+    ok = dets:insert(?MODULE, {Key, Value}),
+    ok = dets:sync(?MODULE),
+    {noreply, St};
+
+handle_cast({delete, Pattern}, St) ->
+    ok = dets:match_delete(?MODULE, Pattern),
+    ok = dets:sync(?MODULE),
+    {noreply, St};
 
 handle_cast(Request, St) ->
     {stop, {unexpected_cast, Request}, St}.
