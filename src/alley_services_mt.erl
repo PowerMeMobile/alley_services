@@ -140,8 +140,8 @@ code_change(_OldVsn, St, _Extra) ->
 
 send(fill_coverage_tab, Req) ->
     Customer = Req#send_req.customer,
-    Networks = Customer#k1api_auth_response_customer_dto.networks,
-    DefaultProviderId = Customer#k1api_auth_response_customer_dto.default_provider_id,
+    Networks = Customer#auth_customer_v1.networks,
+    DefaultProviderId = Customer#auth_customer_v1.default_provider_id,
     CoverageTab = ets:new(coverage_tab, [private]),
     alley_services_coverage:fill_coverage_tab(Networks, DefaultProviderId, CoverageTab),
     send(check_originator, Req#send_req{coverage_tab = CoverageTab});
@@ -149,7 +149,7 @@ send(fill_coverage_tab, Req) ->
 send(check_originator, Req) ->
     Customer = Req#send_req.customer,
     Originator = Req#send_req.originator,
-    AllowedSources = Customer#k1api_auth_response_customer_dto.allowed_sources,
+    AllowedSources = Customer#auth_customer_v1.allowed_sources,
     case lists:member(Originator, AllowedSources) of
         true ->
             send(check_recipients, Req);
@@ -194,7 +194,7 @@ send(route_to_providers, Req) ->
 send(route_to_gateways, Req) ->
     DestAddrs = Req#send_req.routable,
     Customer = Req#send_req.customer,
-    Providers = Customer#k1api_auth_response_customer_dto.providers,
+    Providers = Customer#auth_customer_v1.providers,
     case alley_services_coverage:route_addrs_to_gateways(DestAddrs, Providers) of
         {[], _} ->
             {ok, #send_result{result = no_dest_addrs}};
@@ -259,9 +259,9 @@ send(define_text_encoding, Req) ->
 
 send(define_smpp_params, Req) when Req#send_req.action =:= send_service_sms ->
     Customer = Req#send_req.customer,
-    ReceiptsAllowed = Customer#k1api_auth_response_customer_dto.receipts_allowed,
-    NoRetry = Customer#k1api_auth_response_customer_dto.no_retry,
-    DefaultValidity = Customer#k1api_auth_response_customer_dto.default_validity,
+    ReceiptsAllowed = Customer#auth_customer_v1.receipts_allowed,
+    NoRetry = Customer#auth_customer_v1.no_retry,
+    DefaultValidity = Customer#auth_customer_v1.default_validity,
     Params = Req#send_req.smpp_params ++ [
         {<<"registered_delivery">>, ReceiptsAllowed},
         {<<"service_type">>, <<>>},
@@ -278,9 +278,9 @@ send(define_smpp_params, Req) when Req#send_req.action =:= send_service_sms ->
 
 send(define_smpp_params, Req) when Req#send_req.action =:= send_binary_sms ->
     Customer = Req#send_req.customer,
-    ReceiptsAllowed = Customer#k1api_auth_response_customer_dto.receipts_allowed,
-    NoRetry = Customer#k1api_auth_response_customer_dto.no_retry,
-    DefaultValidity = Customer#k1api_auth_response_customer_dto.default_validity,
+    ReceiptsAllowed = Customer#auth_customer_v1.receipts_allowed,
+    NoRetry = Customer#auth_customer_v1.no_retry,
+    DefaultValidity = Customer#auth_customer_v1.default_validity,
     DC = maybe_binary_to_integer(Req#send_req.data_coding),
     ESMClass = maybe_binary_to_integer(Req#send_req.esm_class),
     ProtocolId = maybe_binary_to_integer(Req#send_req.protocol_id),
@@ -299,9 +299,9 @@ send(define_smpp_params, Req) when Req#send_req.action =:= send_binary_sms ->
 send(define_smpp_params, Req) ->
     Encoding = Req#send_req.encoding,
     Customer = Req#send_req.customer,
-    ReceiptsAllowed = Customer#k1api_auth_response_customer_dto.receipts_allowed,
-    NoRetry = Customer#k1api_auth_response_customer_dto.no_retry,
-    DefaultValidity = Customer#k1api_auth_response_customer_dto.default_validity,
+    ReceiptsAllowed = Customer#auth_customer_v1.receipts_allowed,
+    NoRetry = Customer#auth_customer_v1.no_retry,
+    DefaultValidity = Customer#auth_customer_v1.default_validity,
     Params = Req#send_req.smpp_params ++ flash(Req#send_req.flash, Encoding) ++ [
         {<<"registered_delivery">>, ReceiptsAllowed},
         {<<"service_type">>, <<>>},
@@ -315,7 +315,7 @@ send(define_smpp_params, Req) ->
 
 send(check_billing, Req) ->
     Customer = Req#send_req.customer,
-    case Customer#k1api_auth_response_customer_dto.pay_type of
+    case Customer#auth_customer_v1.pay_type of
         postpaid ->
             send(request_credit, Req);
         prepaid ->
@@ -586,9 +586,9 @@ calc_sending_price(Req) ->
     {NetworkId2Addrs, []} =
         alley_services_coverage:route_addrs_to_networks(DestAddrs, CoverageTab),
 
-    Networks = Customer#k1api_auth_response_customer_dto.networks,
-    Providers = Customer#k1api_auth_response_customer_dto.providers,
-    DefaultProviderId = Customer#k1api_auth_response_customer_dto.default_provider_id,
+    Networks = Customer#auth_customer_v1.networks,
+    Providers = Customer#auth_customer_v1.providers,
+    DefaultProviderId = Customer#auth_customer_v1.default_provider_id,
     NetworkId2SmsPrice = alley_services_coverage:build_network_to_sms_price_map(
         Networks, Providers, DefaultProviderId),
 
@@ -608,7 +608,7 @@ build_billy_service_request(Req) ->
         alley_services_coverage:route_addrs_to_networks(DestAddrs, CoverageTab),
 
     Customer = Req#send_req.customer,
-    Networks = Customer#k1api_auth_response_customer_dto.networks,
+    Networks = Customer#auth_customer_v1.networks,
     NetTypeTab = ets:new(net_type_tab, [private]),
     alley_services_coverage:fill_network_type_tab(Networks, NetTypeTab),
 

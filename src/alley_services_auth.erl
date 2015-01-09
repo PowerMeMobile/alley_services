@@ -22,16 +22,16 @@ start_link() ->
     rmql_rpc_client:start_link(?MODULE, QueueName).
 
 -spec authenticate(binary(), binary(), atom(), binary()) ->
-    {ok, #k1api_auth_response_dto{}} |
+    {ok, #auth_resp_v1{}} |
     {error, timeout}.
 authenticate(CustomerId, UserId, Type, Password) ->
     case request_backend(CustomerId, UserId, Type, Password) of
-        {ok, AuthResp = #k1api_auth_response_dto{result = Result}} ->
+        {ok, AuthResp = #auth_resp_v1{result = Result}} ->
             case Result of
-                {customer, _} ->
+                #auth_customer_v1{} ->
                     ok = alley_services_auth_cache:store(
                         CustomerId, UserId, Type, Password, AuthResp);
-                {error, _} ->
+                #auth_error_v1{} ->
                     ok
             end,
             {ok, AuthResp};
@@ -54,8 +54,8 @@ authenticate(CustomerId, UserId, Type, Password) ->
 
 request_backend(CustomerId, UserId, Type, Password) ->
     ReqId = uuid:unparse(uuid:generate_time()),
-    AuthReq = #k1api_auth_request_dto{
-        id = ReqId,
+    AuthReq = #auth_req_v1{
+        req_id = ReqId,
         customer_id = CustomerId,
         user_id = UserId,
         password = Password,
@@ -63,9 +63,9 @@ request_backend(CustomerId, UserId, Type, Password) ->
     },
     ?log_debug("Sending auth request: ~p", [AuthReq]),
     {ok, Payload} = adto:encode(AuthReq),
-    case rmql_rpc_client:call(?MODULE, Payload, <<"OneAPIAuthReq">>) of
+    case rmql_rpc_client:call(?MODULE, Payload, <<"AuthReqV1">>) of
         {ok, Bin} ->
-            case adto:decode(#k1api_auth_response_dto{}, Bin) of
+            case adto:decode(#auth_resp_v1{}, Bin) of
                 {ok, AuthResp} ->
                     ?log_debug("Got auth response: ~p", [AuthResp]),
                     {ok, AuthResp};
