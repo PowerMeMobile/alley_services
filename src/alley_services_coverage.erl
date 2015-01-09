@@ -30,9 +30,9 @@
 -define(NPI_UNKNOWN,       0).
 -define(NPI_ISDN,          1). % E163/E164
 
--type provider_id() :: uuid_dto().
--type gateway_id()  :: uuid_dto().
--type network_id()  :: uuid_dto().
+-type provider_id() :: uuid().
+-type gateway_id()  :: uuid().
+-type network_id()  :: uuid().
 
 %% ===================================================================
 %% API
