@@ -38,7 +38,7 @@
 %% API
 %% ===================================================================
 
--spec fill_coverage_tab([#network_dto{}], provider_id(), ets:tid()) -> ets:tid().
+-spec fill_coverage_tab([#network_v1{}], provider_id(), ets:tid()) -> ets:tid().
 fill_coverage_tab(Networks, DefaultProviderId, Tab) ->
     FlatNetworks = flatten_networks(Networks, DefaultProviderId),
     lists:foreach(fun(NetworkTuple) ->
@@ -48,9 +48,9 @@ fill_coverage_tab(Networks, DefaultProviderId, Tab) ->
     ets:insert(Tab, {prefix_lens, PrefixLens}),
     Tab.
 
--spec fill_network_type_tab([#network_dto{}], ets:tid()) -> ets:tid().
+-spec fill_network_type_tab([#network_v1{}], ets:tid()) -> ets:tid().
 fill_network_type_tab(Networks, Tab) ->
-    OnNetNs = [N || N <- Networks, N#network_dto.is_home],
+    OnNetNs = [N || N <- Networks, N#network_v1.is_home],
 
     OnNetCCs =
         case OnNetNs of
@@ -61,13 +61,13 @@ fill_network_type_tab(Networks, Tab) ->
                 {ok, CC} = application:get_env(?APP, country_code),
                 [CC];
             _  ->
-                lists:usort([N#network_dto.country_code || N <- OnNetNs])
+                lists:usort([N#network_v1.country_code || N <- OnNetNs])
         end,
 
-    OnNetNIDs = [N#network_dto.id || N <- OnNetNs],
-    OffNetNIDs = [N#network_dto.id || N <- Networks,
-        N#network_dto.is_home =:= false,
-        lists:member(N#network_dto.country_code, OnNetCCs)],
+    OnNetNIDs = [N#network_v1.id || N <- OnNetNs],
+    OffNetNIDs = [N#network_v1.id || N <- Networks,
+        N#network_v1.is_home =:= false,
+        lists:member(N#network_v1.country_code, OnNetCCs)],
 
     lists:foreach(
         fun(NID) -> ets:insert(Tab, {NID, on_net}) end, OnNetNIDs),
@@ -103,7 +103,7 @@ which_network_type(NetworkId, Tab) ->
 route_addrs_to_providers(Addrs, CoverageTab) ->
     route_addrs_to_providers(Addrs, CoverageTab, dict:new(), []).
 
--spec route_addrs_to_gateways([{provider_id(), [#addr{}]}], [#provider_dto{}]) ->
+-spec route_addrs_to_gateways([{provider_id(), [#addr{}]}], [#provider_v1{}]) ->
     {[{gateway_id(), [#addr{}]}], [#addr{}]}.
 route_addrs_to_gateways(ProvIdAddrs, Providers) ->
     route_addrs_to_gateways(ProvIdAddrs, Providers, [], []).
@@ -113,7 +113,7 @@ route_addrs_to_gateways(ProvIdAddrs, Providers) ->
 route_addrs_to_networks(Addrs, CoverageTab) ->
     route_addrs_to_networks(Addrs, CoverageTab, dict:new(), []).
 
--spec build_network_to_sms_price_map([#network_dto{}], [#provider_dto{}], provider_id()) ->
+-spec build_network_to_sms_price_map([#network_v1{}], [#provider_v1{}], provider_id()) ->
     [{network_id(), float()}].
 build_network_to_sms_price_map(Networks, Providers, DefaultProviderId) ->
     network_id_to_sms_price(Networks, Providers, DefaultProviderId).
@@ -147,17 +147,17 @@ flatten_networks(Networks, DefaultProviderId) ->
     end, Networks).
 
 make_coverage_tuple(Network, undefined) ->
-    NetworkId   = Network#network_dto.id,
-    CountryCode = Network#network_dto.country_code,
-    NumberLen   = Network#network_dto.number_len,
-    Prefixes    = Network#network_dto.prefixes,
-    ProviderId  = Network#network_dto.provider_id,
+    NetworkId   = Network#network_v1.id,
+    CountryCode = Network#network_v1.country_code,
+    NumberLen   = Network#network_v1.number_len,
+    Prefixes    = Network#network_v1.prefixes,
+    ProviderId  = Network#network_v1.provider_id,
     [{<<CountryCode/binary, Prefix/binary>>, NumberLen, NetworkId, ProviderId} || Prefix <- Prefixes];
 make_coverage_tuple(Network, DefaultProviderId) ->
-    NetworkId   = Network#network_dto.id,
-    CountryCode = Network#network_dto.country_code,
-    NumberLen   = Network#network_dto.number_len,
-    Prefixes    = Network#network_dto.prefixes,
+    NetworkId   = Network#network_v1.id,
+    CountryCode = Network#network_v1.country_code,
+    NumberLen   = Network#network_v1.number_len,
+    Prefixes    = Network#network_v1.prefixes,
     [{<<CountryCode/binary, Prefix/binary>>, NumberLen, NetworkId, DefaultProviderId} || Prefix <- Prefixes].
 
 to_international(Addr = #addr{addr = <<"+", Rest/binary>>}, _StripZero, _CountryCode) ->
@@ -222,7 +222,7 @@ route_addrs_to_providers([Addr | Rest], CoverageTab, Routable, Unroutable) ->
 route_addrs_to_gateways([], _Providers, Routable, Unroutable) ->
     {Routable, Unroutable};
 route_addrs_to_gateways([{ProvId, Addrs} | Rest], Providers, Routable, Unroutable) ->
-    case lists:keyfind(ProvId, #provider_dto.id, Providers) of
+    case lists:keyfind(ProvId, #provider_v1.id, Providers) of
         false ->
             %% the misconfiguration issue. nowhere to route.
             route_addrs_to_gateways(Rest, Providers, Routable, Addrs ++ Unroutable);
@@ -230,7 +230,7 @@ route_addrs_to_gateways([{ProvId, Addrs} | Rest], Providers, Routable, Unroutabl
             {ok, BulkThreshold} = application:get_env(?APP, bulk_threshold),
             UseBulkGtw = length(Addrs) >= BulkThreshold,
             %% try to workaround possible misconfiguration issues.
-            case {Provider#provider_dto.gateway_id, Provider#provider_dto.bulk_gateway_id, UseBulkGtw} of
+            case {Provider#provider_v1.gateway_id, Provider#provider_v1.bulk_gateway_id, UseBulkGtw} of
                 {undefined, undefined, _} ->
                     %% the misconfiguration issue. nowhere to route.
                     route_addrs_to_gateways(Rest, Providers, Routable, Addrs ++ Unroutable);
@@ -265,20 +265,20 @@ network_id_to_sms_price(Networks, Providers, DefaultProviderId) ->
             undefined ->
                 {Networks, Providers};
             DefaultProviderId ->
-                {[N#network_dto{provider_id = DefaultProviderId} || N <- Networks],
-                 [P || P <- Providers, P#provider_dto.id =:= DefaultProviderId]}
+                {[N#network_v1{provider_id = DefaultProviderId} || N <- Networks],
+                 [P || P <- Providers, P#provider_v1.id =:= DefaultProviderId]}
         end,
     network_id_to_sms_price(Networks2, Providers2).
 
 network_id_to_sms_price(Networks, Providers) ->
     ProviderId2SmsAddPoints =
-        [{P#provider_dto.id, P#provider_dto.sms_add_points} || P <- Providers],
-    [{N#network_dto.id, calc_sms_price(N, ProviderId2SmsAddPoints)} || N <- Networks].
+        [{P#provider_v1.id, P#provider_v1.sms_add_points} || P <- Providers],
+    [{N#network_v1.id, calc_sms_price(N, ProviderId2SmsAddPoints)} || N <- Networks].
 
 calc_sms_price(Network, ProviderId2SmsAddPoints) ->
-    SmsPoints = Network#network_dto.sms_points,
-    SmsMultPoints = Network#network_dto.sms_mult_points,
-    ProviderId = Network#network_dto.provider_id,
+    SmsPoints = Network#network_v1.sms_points,
+    SmsMultPoints = Network#network_v1.sms_mult_points,
+    ProviderId = Network#network_v1.provider_id,
     SmsAddPoints = proplists:get_value(ProviderId, ProviderId2SmsAddPoints),
     (SmsPoints + SmsAddPoints) * SmsMultPoints.
 
@@ -289,7 +289,7 @@ calc_sms_price(Network, ProviderId2SmsAddPoints) ->
 -ifdef(TEST).
 
 networks() ->
-    Network1 = #network_dto{
+    Network1 = #network_v1{
         id = <<"NID1">>,
         country_code = <<"999">>,
         number_len = 12,
@@ -297,7 +297,7 @@ networks() ->
         provider_id = <<"PID1">>,
         is_home = false
     },
-    Network2 = #network_dto{
+    Network2 = #network_v1{
         id = <<"NID2">>,
         country_code = <<"999">>,
         number_len = 0,
@@ -305,7 +305,7 @@ networks() ->
         provider_id = <<"PID2">>,
         is_home = false
     },
-    Network3 = #network_dto{
+    Network3 = #network_v1{
         id = <<"NID3">>,
         country_code = <<"998">>,
         number_len = 0,
@@ -364,14 +364,14 @@ fill_coverage_tab_def_def_prov_id_test() ->
 
 fill_coverage_tab_test() ->
     Networks = [
-        #network_dto{
+        #network_v1{
             id = <<"b8a55c6d-9ea6-43a8-bf70-b1c34eb4a8fe">>,
             country_code = <<"444">>,
             number_len = 12,
             prefixes = [<<"296">>, <<"293">>],
             provider_id = <<"123">>
         },
-        #network_dto{
+        #network_v1{
             id = <<"d9f043d7-8cb6-4a53-94a8-4789da444f18">>,
             country_code = <<"555">>,
             number_len = 13,
@@ -423,21 +423,21 @@ which_network_test() ->
     ok = application:set_env(?APP, country_code, <<"999">>),
     ok = application:set_env(?APP, strip_leading_zero, false),
     Networks = [
-        #network_dto{
+        #network_v1{
             id = <<"b8a55c6d-9ea6-43a8-bf70-b1c34eb4a8fe">>,
             country_code = <<"444">>,
             number_len = 12,
             prefixes = [<<"296">>, <<"293">>],
             provider_id = <<"123">>
         },
-        #network_dto{
+        #network_v1{
             id = <<"d9f043d7-8cb6-4a53-94a8-4789da444f18">>,
             country_code = <<"555">>,
             number_len = 13,
             prefixes = [<<"2311">>, <<"3320">>],
             provider_id = <<"456">>
         },
-        #network_dto{
+        #network_v1{
             id = <<"06561b4c-d7b2-4cab-b031-af2a90c31491">>,
             country_code = <<"999">>,
             number_len = 12,
@@ -495,7 +495,7 @@ fill_network_type_tab_1_test() ->
 
 fill_network_type_tab_2_test() ->
     [N | Ns] = networks(),
-    Networks = [N#network_dto{is_home = true} | Ns],
+    Networks = [N#network_v1{is_home = true} | Ns],
     Tab = ets:new(map, [ordered_set]),
     fill_network_type_tab(Networks, Tab),
     Expected = [
@@ -517,7 +517,7 @@ which_network_type_1_test() ->
 
 which_network_type_2_test() ->
     [N | Ns] = networks(),
-    Networks = [N#network_dto{is_home = true} | Ns],
+    Networks = [N#network_v1{is_home = true} | Ns],
     Tab = ets:new(map, [ordered_set]),
     fill_network_type_tab(Networks, Tab),
     ?assertEqual(on_net, which_network_type(<<"NID1">>, Tab)),
@@ -594,14 +594,14 @@ strip_non_digits_test() ->
 
 flatten_networks_wo_default_provider_id_test() ->
     Networks = [
-        #network_dto{
+        #network_v1{
             id = <<"b8a55c6d-9ea6-43a8-bf70-b1c34eb4a8fe">>,
             country_code = <<"444">>,
             number_len = 12,
             prefixes = [<<"296">>, <<"293">>],
             provider_id = <<"123">>
         },
-        #network_dto{
+        #network_v1{
             id = <<"d9f043d7-8cb6-4a53-94a8-4789da444f18">>,
             country_code = <<"555">>,
             number_len = 13,
@@ -618,14 +618,14 @@ flatten_networks_wo_default_provider_id_test() ->
 
 flatten_networks_with_default_provider_id_test() ->
     Networks = [
-        #network_dto{
+        #network_v1{
             id = <<"b8a55c6d-9ea6-43a8-bf70-b1c34eb4a8fe">>,
             country_code = <<"444">>,
             number_len = 12,
             prefixes = [<<"296">>, <<"293">>],
             provider_id = <<"123">>
         },
-        #network_dto{
+        #network_v1{
             id = <<"d9f043d7-8cb6-4a53-94a8-4789da444f18">>,
             country_code = <<"555">>,
             number_len = 13,
