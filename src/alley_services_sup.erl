@@ -25,7 +25,6 @@ start_link() ->
 init([]) ->
     {ok, {{one_for_one, 5, 10}, [
         ?CHILD(alley_services_pdu_logger_sup, permanent, infinity, supervisor),
-        ?CHILD(alley_services_billy_session, transient, 5000, worker),
         ?CHILD(alley_services_http_in_logger, permanent, 5000, worker),
         ?CHILD(alley_services_http_out_logger, permanent, 5000, worker),
         ?CHILD(alley_services_auth_cache, permanent, 5000, worker),

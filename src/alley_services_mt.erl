@@ -27,7 +27,6 @@
 -include_lib("alley_common/include/logging.hrl").
 -include_lib("alley_common/include/gen_server_spec.hrl").
 -include_lib("amqp_client/include/amqp_client.hrl").
--include_lib("billy_client/include/billy_client.hrl").
 
 -record(unconfirmed, {
     id      :: integer(),
@@ -568,32 +567,6 @@ calc_sending_price(Req) ->
 
     alley_services_coverage:calc_sending_price(
         NetworkId2Addrs, NetworkId2SmsPrice, NumberOfParts).
-
-build_billy_service_request(Req) ->
-    CoverageTab = Req#send_req.coverage_tab,
-    GtwId2Addrs = Req#send_req.routable,
-    DestAddrs = lists:flatten([Addr || {_GtwId, Addr} <- GtwId2Addrs]),
-    {NetworkId2Addrs, []} =
-        alley_services_coverage:route_addrs_to_networks(DestAddrs, CoverageTab),
-
-    Customer = Req#send_req.customer,
-    Networks = Customer#auth_customer_v1.networks,
-    NetTypeTab = ets:new(net_type_tab, [private]),
-    alley_services_coverage:fill_network_type_tab(Networks, NetTypeTab),
-
-    [{network_id_to_service_type(NID, NetTypeTab), length(Addrs)}
-        || {NID, Addrs} <- NetworkId2Addrs].
-
-network_id_to_service_type(NetworkId, Tab) ->
-    case alley_services_coverage:which_network_type(
-            NetworkId, Tab) of
-        on_net ->
-            ?SERVICE_TYPE_SMS_ON;
-        off_net ->
-            ?SERVICE_TYPE_SMS_OFF;
-        int_net ->
-            ?SERVICE_TYPE_SMS_INT
-    end.
 
 %% FIXME: move this logic to clients
 maybe_binary_to_integer(undefined) ->
