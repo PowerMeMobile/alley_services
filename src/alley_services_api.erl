@@ -10,7 +10,7 @@
 -export([
     get_coverage/3,
     get_blacklist/0,
-    get_delivery_status/4,
+    get_sms_status/3,
     retrieve_sms/4,
     request_credit/2,
 
@@ -97,31 +97,30 @@ get_blacklist() ->
             {error, timeout}
     end.
 
--spec get_delivery_status(customer_id(), user_id(), request_id(), src_addr()) ->
-    {ok, [#k1api_sms_delivery_status_response_dto{}]} | {error, term()}.
-get_delivery_status(_CustomerId, _UserId, undefined, _SenderAddr) ->
+-spec get_sms_status(customer_id(), user_id(), request_id()) ->
+    {ok, [#sms_status_resp_v1{}]} | {error, term()}.
+get_sms_status(_CustomerId, _UserId, undefined) ->
     {error, empty_request_id};
-get_delivery_status(_CustomerId, _UserId, <<"">>, _SenderAddr) ->
+get_sms_status(_CustomerId, _UserId, <<"">>) ->
     {error, empty_request_id};
-get_delivery_status(CustomerId, UserId, SmsReqId, SenderAddr) ->
+get_sms_status(CustomerId, UserId, SmsReqId) ->
     ReqId = uuid:unparse(uuid:generate_time()),
-    Req = #k1api_sms_delivery_status_request_dto{
-        id = ReqId,
+    Req = #sms_status_req_v1{
+        req_id = ReqId,
         customer_id = CustomerId,
         user_id = UserId,
-        sms_request_id = SmsReqId,
-        address = SenderAddr
+        sms_req_id = SmsReqId
     },
-    ?log_debug("Sending delivery status request: ~p", [Req]),
+    ?log_debug("Sending sms status request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
-    case rmql_rpc_client:call(?MODULE, ReqBin, <<"DeliveryStatusReq">>) of
+    case rmql_rpc_client:call(?MODULE, ReqBin, <<"SmsStatusReqV1">>) of
         {ok, RespBin} ->
-            case adto:decode(#k1api_sms_delivery_status_response_dto{}, RespBin) of
-                {ok, Resp = #k1api_sms_delivery_status_response_dto{statuses = []}} ->
+            case adto:decode(#sms_status_resp_v1{}, RespBin) of
+                {ok, Resp = #sms_status_resp_v1{statuses = []}} ->
                     ?log_debug("Got delivery status response: ~p", [Resp]),
                     ?log_error("Delivery status response failed with: ~p", [invalid_request_id]),
                     {error, invalid_request_id};
-                {ok, Resp = #k1api_sms_delivery_status_response_dto{}} ->
+                {ok, Resp = #sms_status_resp_v1{}} ->
                     ?log_debug("Got delivery status response: ~p", [Resp]),
                     {ok, Resp};
                 {error, Error} ->
