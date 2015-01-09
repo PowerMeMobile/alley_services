@@ -314,57 +314,24 @@ send(define_smpp_params, Req) ->
     send(check_billing, Req#send_req{smpp_params = Params});
 
 send(check_billing, Req) ->
-    Customer = Req#send_req.customer,
-    case Customer#auth_customer_v1.pay_type of
-        postpaid ->
-            send(request_credit, Req);
-        prepaid ->
-            send(billy_reserve, Req)
-    end;
-
-send(request_credit, Req) ->
     CustomerId = Req#send_req.customer_id,
     Price = calc_sending_price(Req),
-    ?log_debug("Postpaid CustomerId: ~p, sending price: ~p",
+    ?log_debug("Check billing (customer_id: ~p, sending price: ~p)",
         [CustomerId, Price]),
     case alley_services_api:request_credit(CustomerId, Price) of
         {allowed, CreditLeft} ->
             ?log_debug("Sending allowed. CustomerId: ~p, credit left: ~p",
                 [CustomerId, CreditLeft]),
-             send(build_req_dto_s, Req);
+             send(build_req_dto_s, Req#send_req{credit_left = CreditLeft});
         {denied, CreditLeft} ->
             ?log_error("Sending denied. CustomerId: ~p, credit left: ~p",
                 [CustomerId, CreditLeft]),
-            {ok, #send_result{result = credit_limit_exceeded}};
+            {ok, #send_result{
+                result = credit_limit_exceeded,
+                credit_left = CreditLeft
+            }};
         {error, timeout} ->
             {ok, #send_result{result = timeout}}
-    end;
-
-send(billy_reserve, Req) ->
-    {ok, SessionId} = alley_services_billy_session:get_session_id(),
-    CustomerId = Req#send_req.customer_id,
-    UserId = Req#send_req.user_id,
-    ClientType = Req#send_req.client_type,
-    ServiceRequest = build_billy_service_request(Req),
-    ?log_debug("Prepaid CustomerId: ~p, UserId: ~p, service request: ~p",
-        [CustomerId, UserId, ServiceRequest]),
-    case billy_client:reserve(SessionId, atom_to_binary(ClientType, utf8),
-            CustomerId, UserId, ServiceRequest) of
-        {accepted, TransactionId} ->
-            ?log_debug("Sending allowed", []),
-            {ok, Reply} = send(build_req_dto_s, Req),
-            case proplists:get_value(id, Reply) of
-                undefined ->
-                    ?log_debug("Rollback", []),
-                    billy_client:rollback(TransactionId);
-                _ ->
-                    ?log_debug("Commit", []),
-                    billy_client:commit(TransactionId)
-            end,
-            {ok, Reply};
-        {rejected, Reason} ->
-            ?log_error("Sending denied by Billy with: ~p", [Reason]),
-            {ok, #send_result{result = Reason}}
     end;
 
 send(build_req_dto_s, Req) ->
@@ -413,7 +380,9 @@ send(publish_dto_s, Req) ->
     {ok, #send_result{
         result = ok,
         req_id = ReqId,
-        rejected = Req#send_req.rejected
+        rejected = Req#send_req.rejected,
+        customer = Req#send_req.customer,
+        credit_left = Req#send_req.credit_left
     }}.
 
 %% ===================================================================

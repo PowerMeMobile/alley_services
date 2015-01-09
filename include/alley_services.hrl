@@ -3,13 +3,13 @@
 
 -include_lib("alley_dto/include/adto.hrl").
 
--type auth_resp()   :: #k1api_auth_response_dto{}.
+-type customer()    :: #auth_customer_v1{}.
 -type provider_id() :: binary().
 -type gateway_id()  :: binary().
 
 -record(send_req, {
     action       :: atom(),
-    customer     :: undefined | auth_resp(),
+    customer     :: undefined | customer(),
     customer_id  :: undefined | binary(),
     user_id      :: undefined | binary(),
     client_type  :: atom(),
@@ -35,13 +35,17 @@
     binary_body  :: undefined | binary(),
     data_coding  :: undefined | binary(),
     esm_class    :: undefined | binary(),
-    protocol_id  :: undefined | binary()
+    protocol_id  :: undefined | binary(),
+
+    credit_left  :: undefined | float()
 }).
 
 -record(send_result, {
     result       :: undefined | atom(),
     req_id       :: undefined | binary(),
-    rejected     :: undefined | list()
+    rejected     :: undefined | list(),
+    customer     :: undefined | customer(),
+    credit_left  :: undefined | float()
 }).
 
 -record('DOWN',{
