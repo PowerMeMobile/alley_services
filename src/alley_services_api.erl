@@ -71,21 +71,18 @@ get_coverage(CustomerId, UserId, Version) ->
     end.
 
 -spec get_blacklist() ->
-    {ok, [#k1api_blacklist_response_dto{}]} | {error, term()}.
+    {ok, [#blacklist_resp_v1{}]} | {error, term()}.
 get_blacklist() ->
     ReqId = uuid:unparse(uuid:generate_time()),
-    Req = #k1api_blacklist_request_dto{
-        id = ReqId,
-        customer_id = <<>>,
-        user_id = <<>>,
-        version = <<>>
+    Req = #blacklist_req_v1{
+        req_id = ReqId
     },
     ?log_debug("Sending blacklist request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
-    case rmql_rpc_client:call(?MODULE, ReqBin, <<"BlacklistReq">>) of
+    case rmql_rpc_client:call(?MODULE, ReqBin, <<"BlacklistReqV1">>) of
         {ok, RespBin} ->
-            case adto:decode(#k1api_blacklist_response_dto{}, RespBin) of
-                {ok, Resp = #k1api_blacklist_response_dto{}} ->
+            case adto:decode(#blacklist_resp_v1{}, RespBin) of
+                {ok, Resp = #blacklist_resp_v1{}} ->
                     ?log_debug("Got blacklist response: ~p", [Resp]),
                     {ok, Resp};
                 {error, Error} ->
