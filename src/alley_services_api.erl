@@ -44,21 +44,19 @@ start_link() ->
     rmql_rpc_client:start_link(?MODULE, QueueName).
 
 -spec get_coverage(customer_id(), user_id(), version()) ->
-    {ok, [#k1api_coverage_response_dto{}]} | {error, term()}.
+    {ok, [#coverage_resp_v1{}]} | {error, term()}.
 get_coverage(CustomerId, UserId, Version) ->
     ReqId = uuid:unparse(uuid:generate_time()),
-    Req = #k1api_coverage_request_dto{
-        id = ReqId,
-        customer_id = CustomerId,
-        user_id = UserId,
-        version = Version
+    Req = #coverage_req_v1{
+        req_id = ReqId,
+        customer_id = CustomerId
     },
     ?log_debug("Sending coverage request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
-    case rmql_rpc_client:call(?MODULE, ReqBin, <<"CoverageReq">>) of
+    case rmql_rpc_client:call(?MODULE, ReqBin, <<"CoverageReqV1">>) of
         {ok, RespBin} ->
-            case adto:decode(#k1api_coverage_response_dto{}, RespBin) of
-                {ok, Resp = #k1api_coverage_response_dto{}} ->
+            case adto:decode(#coverage_resp_v1{}, RespBin) of
+                {ok, Resp = #coverage_resp_v1{}} ->
                     ?log_debug("Got coverage response: ~p", [Resp]),
                     {ok, Resp};
                 {error, Error} ->
