@@ -167,20 +167,20 @@ retrieve_sms(CustomerId, UserId, DestAddr, BatchSize) ->
     {allowed, float()} | {denied, float()} | {error, term()}.
 request_credit(CustomerId, Credit) ->
     ReqId = uuid:unparse(uuid:generate_time()),
-    Req = #k1api_request_credit_request_dto{
-        id = ReqId,
+    Req = #credit_req_v1{
+        req_id = ReqId,
         customer_id = CustomerId,
         credit = Credit
     },
     ?log_debug("Sending request credit request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
-    case rmql_rpc_client:call(?MODULE, ReqBin, <<"RequestCreditReq">>) of
+    case rmql_rpc_client:call(?MODULE, ReqBin, <<"CreditReqV1">>) of
         {ok, RespBin} ->
-            case adto:decode(#k1api_request_credit_response_dto{}, RespBin) of
-                {ok, Resp = #k1api_request_credit_response_dto{}} ->
+            case adto:decode(#credit_resp_v1{}, RespBin) of
+                {ok, Resp = #credit_resp_v1{}} ->
                     ?log_debug("Got request credit response: ~p", [Resp]),
-                    Result = Resp#k1api_request_credit_response_dto.result,
-                    CreditLeft = Resp#k1api_request_credit_response_dto.credit_left,
+                    Result = Resp#credit_resp_v1.result,
+                    CreditLeft = Resp#credit_resp_v1.credit_left,
                     {Result, CreditLeft};
                 {error, Error} ->
                     ?log_error("Request credit response decode error: ~p", [Error]),
