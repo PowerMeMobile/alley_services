@@ -8,7 +8,7 @@
 
 %% API
 -export([
-    get_coverage/3,
+    get_coverage/1,
     get_blacklist/0,
     get_sms_status/3,
     retrieve_sms/4,
@@ -28,7 +28,6 @@
 
 -type customer_id() :: binary().
 -type user_id()     :: binary().
--type version()     :: binary().
 -type request_id()  :: binary().
 -type src_addr()    :: binary().
 -type dst_addr()    :: binary().
@@ -43,9 +42,9 @@ start_link() ->
     {ok, QueueName} = application:get_env(?APP, kelly_api_queue),
     rmql_rpc_client:start_link(?MODULE, QueueName).
 
--spec get_coverage(customer_id(), user_id(), version()) ->
+-spec get_coverage(customer_id()) ->
     {ok, [#coverage_resp_v1{}]} | {error, term()}.
-get_coverage(CustomerId, UserId, Version) ->
+get_coverage(CustomerId) ->
     ReqId = uuid:unparse(uuid:generate_time()),
     Req = #coverage_req_v1{
         req_id = ReqId,
