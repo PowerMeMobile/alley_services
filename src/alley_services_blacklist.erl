@@ -125,7 +125,7 @@ code_change(_OldVsn, St, _Extra) ->
 
 fill_blacklist(Tab) ->
     case alley_services_api:get_blacklist() of
-        {ok, #k1api_blacklist_response_dto{entries = Entries}} ->
+        {ok, #blacklist_resp_v1{entries = Entries}} ->
             true = ets:delete_all_objects(Tab),
             ok = fill_entries_to_tab(Entries, Tab),
             ets:tab2file(Tab, ?BLACKLIST_FILE, [{extended_info, [object_count]}]);
@@ -134,8 +134,8 @@ fill_blacklist(Tab) ->
     end.
 
 fill_entries_to_tab([E | Es], Tab) ->
-    DstAddr = E#blacklist_entry_dto.dst_addr,
-    SrcAddr = E#blacklist_entry_dto.src_addr,
+    DstAddr = E#blacklist_entry_v1.dst_addr,
+    SrcAddr = E#blacklist_entry_v1.src_addr,
     true = ets:insert(Tab, {DstAddr, SrcAddr}),
     fill_entries_to_tab(Es, Tab);
 fill_entries_to_tab([], _Tab) ->

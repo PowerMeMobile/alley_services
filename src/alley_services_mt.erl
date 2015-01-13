@@ -27,7 +27,6 @@
 -include_lib("alley_common/include/logging.hrl").
 -include_lib("alley_common/include/gen_server_spec.hrl").
 -include_lib("amqp_client/include/amqp_client.hrl").
--include_lib("billy_client/include/billy_client.hrl").
 
 -record(unconfirmed, {
     id      :: integer(),
@@ -98,7 +97,7 @@ handle_call({Action, Payload, ReqId, GtwId}, From, St = #st{}) when
                 {[], GtwQueue}
         end,
     Props = [
-        {content_type, <<"OneAPISmsRequest">>},
+        {content_type, <<"SmsRequest">>},
         {delivery_mode, 2},
         {priority, 1},
         {message_id, ReqId},
@@ -140,8 +139,8 @@ code_change(_OldVsn, St, _Extra) ->
 
 send(fill_coverage_tab, Req) ->
     Customer = Req#send_req.customer,
-    Networks = Customer#k1api_auth_response_customer_dto.networks,
-    DefaultProviderId = Customer#k1api_auth_response_customer_dto.default_provider_id,
+    Networks = Customer#auth_customer_v1.networks,
+    DefaultProviderId = Customer#auth_customer_v1.default_provider_id,
     CoverageTab = ets:new(coverage_tab, [private]),
     alley_services_coverage:fill_coverage_tab(Networks, DefaultProviderId, CoverageTab),
     send(check_originator, Req#send_req{coverage_tab = CoverageTab});
@@ -149,7 +148,7 @@ send(fill_coverage_tab, Req) ->
 send(check_originator, Req) ->
     Customer = Req#send_req.customer,
     Originator = Req#send_req.originator,
-    AllowedSources = Customer#k1api_auth_response_customer_dto.allowed_sources,
+    AllowedSources = Customer#auth_customer_v1.allowed_sources,
     case lists:member(Originator, AllowedSources) of
         true ->
             send(check_recipients, Req);
@@ -194,7 +193,7 @@ send(route_to_providers, Req) ->
 send(route_to_gateways, Req) ->
     DestAddrs = Req#send_req.routable,
     Customer = Req#send_req.customer,
-    Providers = Customer#k1api_auth_response_customer_dto.providers,
+    Providers = Customer#auth_customer_v1.providers,
     case alley_services_coverage:route_addrs_to_gateways(DestAddrs, Providers) of
         {[], _} ->
             {ok, #send_result{result = no_dest_addrs}};
@@ -259,9 +258,9 @@ send(define_text_encoding, Req) ->
 
 send(define_smpp_params, Req) when Req#send_req.action =:= send_service_sms ->
     Customer = Req#send_req.customer,
-    ReceiptsAllowed = Customer#k1api_auth_response_customer_dto.receipts_allowed,
-    NoRetry = Customer#k1api_auth_response_customer_dto.no_retry,
-    DefaultValidity = Customer#k1api_auth_response_customer_dto.default_validity,
+    ReceiptsAllowed = Customer#auth_customer_v1.receipts_allowed,
+    NoRetry = Customer#auth_customer_v1.no_retry,
+    DefaultValidity = Customer#auth_customer_v1.default_validity,
     Params = Req#send_req.smpp_params ++ [
         {<<"registered_delivery">>, ReceiptsAllowed},
         {<<"service_type">>, <<>>},
@@ -278,9 +277,9 @@ send(define_smpp_params, Req) when Req#send_req.action =:= send_service_sms ->
 
 send(define_smpp_params, Req) when Req#send_req.action =:= send_binary_sms ->
     Customer = Req#send_req.customer,
-    ReceiptsAllowed = Customer#k1api_auth_response_customer_dto.receipts_allowed,
-    NoRetry = Customer#k1api_auth_response_customer_dto.no_retry,
-    DefaultValidity = Customer#k1api_auth_response_customer_dto.default_validity,
+    ReceiptsAllowed = Customer#auth_customer_v1.receipts_allowed,
+    NoRetry = Customer#auth_customer_v1.no_retry,
+    DefaultValidity = Customer#auth_customer_v1.default_validity,
     DC = maybe_binary_to_integer(Req#send_req.data_coding),
     ESMClass = maybe_binary_to_integer(Req#send_req.esm_class),
     ProtocolId = maybe_binary_to_integer(Req#send_req.protocol_id),
@@ -299,9 +298,9 @@ send(define_smpp_params, Req) when Req#send_req.action =:= send_binary_sms ->
 send(define_smpp_params, Req) ->
     Encoding = Req#send_req.encoding,
     Customer = Req#send_req.customer,
-    ReceiptsAllowed = Customer#k1api_auth_response_customer_dto.receipts_allowed,
-    NoRetry = Customer#k1api_auth_response_customer_dto.no_retry,
-    DefaultValidity = Customer#k1api_auth_response_customer_dto.default_validity,
+    ReceiptsAllowed = Customer#auth_customer_v1.receipts_allowed,
+    NoRetry = Customer#auth_customer_v1.no_retry,
+    DefaultValidity = Customer#auth_customer_v1.default_validity,
     Params = Req#send_req.smpp_params ++ flash(Req#send_req.flash, Encoding) ++ [
         {<<"registered_delivery">>, ReceiptsAllowed},
         {<<"service_type">>, <<>>},
@@ -314,57 +313,24 @@ send(define_smpp_params, Req) ->
     send(check_billing, Req#send_req{smpp_params = Params});
 
 send(check_billing, Req) ->
-    Customer = Req#send_req.customer,
-    case Customer#k1api_auth_response_customer_dto.pay_type of
-        postpaid ->
-            send(request_credit, Req);
-        prepaid ->
-            send(billy_reserve, Req)
-    end;
-
-send(request_credit, Req) ->
     CustomerId = Req#send_req.customer_id,
     Price = calc_sending_price(Req),
-    ?log_debug("Postpaid CustomerId: ~p, sending price: ~p",
+    ?log_debug("Check billing (customer_id: ~p, sending price: ~p)",
         [CustomerId, Price]),
     case alley_services_api:request_credit(CustomerId, Price) of
         {allowed, CreditLeft} ->
             ?log_debug("Sending allowed. CustomerId: ~p, credit left: ~p",
                 [CustomerId, CreditLeft]),
-             send(build_req_dto_s, Req);
+             send(build_req_dto_s, Req#send_req{credit_left = CreditLeft});
         {denied, CreditLeft} ->
             ?log_error("Sending denied. CustomerId: ~p, credit left: ~p",
                 [CustomerId, CreditLeft]),
-            {ok, #send_result{result = credit_limit_exceeded}};
+            {ok, #send_result{
+                result = credit_limit_exceeded,
+                credit_left = CreditLeft
+            }};
         {error, timeout} ->
             {ok, #send_result{result = timeout}}
-    end;
-
-send(billy_reserve, Req) ->
-    {ok, SessionId} = alley_services_billy_session:get_session_id(),
-    CustomerId = Req#send_req.customer_id,
-    UserId = Req#send_req.user_id,
-    ClientType = Req#send_req.client_type,
-    ServiceRequest = build_billy_service_request(Req),
-    ?log_debug("Prepaid CustomerId: ~p, UserId: ~p, service request: ~p",
-        [CustomerId, UserId, ServiceRequest]),
-    case billy_client:reserve(SessionId, atom_to_binary(ClientType, utf8),
-            CustomerId, UserId, ServiceRequest) of
-        {accepted, TransactionId} ->
-            ?log_debug("Sending allowed", []),
-            {ok, Reply} = send(build_req_dto_s, Req),
-            case proplists:get_value(id, Reply) of
-                undefined ->
-                    ?log_debug("Rollback", []),
-                    billy_client:rollback(TransactionId);
-                _ ->
-                    ?log_debug("Commit", []),
-                    billy_client:commit(TransactionId)
-            end,
-            {ok, Reply};
-        {rejected, Reason} ->
-            ?log_error("Sending denied by Billy with: ~p", [Reason]),
-            {ok, #send_result{result = Reason}}
     end;
 
 send(build_req_dto_s, Req) ->
@@ -413,7 +379,9 @@ send(publish_dto_s, Req) ->
     {ok, #send_result{
         result = ok,
         req_id = ReqId,
-        rejected = Req#send_req.rejected
+        rejected = Req#send_req.rejected,
+        customer = Req#send_req.customer,
+        credit_left = Req#send_req.credit_left
     }}.
 
 %% ===================================================================
@@ -586,9 +554,9 @@ calc_sending_price(Req) ->
     {NetworkId2Addrs, []} =
         alley_services_coverage:route_addrs_to_networks(DestAddrs, CoverageTab),
 
-    Networks = Customer#k1api_auth_response_customer_dto.networks,
-    Providers = Customer#k1api_auth_response_customer_dto.providers,
-    DefaultProviderId = Customer#k1api_auth_response_customer_dto.default_provider_id,
+    Networks = Customer#auth_customer_v1.networks,
+    Providers = Customer#auth_customer_v1.providers,
+    DefaultProviderId = Customer#auth_customer_v1.default_provider_id,
     NetworkId2SmsPrice = alley_services_coverage:build_network_to_sms_price_map(
         Networks, Providers, DefaultProviderId),
 
@@ -599,32 +567,6 @@ calc_sending_price(Req) ->
 
     alley_services_coverage:calc_sending_price(
         NetworkId2Addrs, NetworkId2SmsPrice, NumberOfParts).
-
-build_billy_service_request(Req) ->
-    CoverageTab = Req#send_req.coverage_tab,
-    GtwId2Addrs = Req#send_req.routable,
-    DestAddrs = lists:flatten([Addr || {_GtwId, Addr} <- GtwId2Addrs]),
-    {NetworkId2Addrs, []} =
-        alley_services_coverage:route_addrs_to_networks(DestAddrs, CoverageTab),
-
-    Customer = Req#send_req.customer,
-    Networks = Customer#k1api_auth_response_customer_dto.networks,
-    NetTypeTab = ets:new(net_type_tab, [private]),
-    alley_services_coverage:fill_network_type_tab(Networks, NetTypeTab),
-
-    [{network_id_to_service_type(NID, NetTypeTab), length(Addrs)}
-        || {NID, Addrs} <- NetworkId2Addrs].
-
-network_id_to_service_type(NetworkId, Tab) ->
-    case alley_services_coverage:which_network_type(
-            NetworkId, Tab) of
-        on_net ->
-            ?SERVICE_TYPE_SMS_ON;
-        off_net ->
-            ?SERVICE_TYPE_SMS_OFF;
-        int_net ->
-            ?SERVICE_TYPE_SMS_INT
-    end.
 
 %% FIXME: move this logic to clients
 maybe_binary_to_integer(undefined) ->

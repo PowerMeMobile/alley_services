@@ -8,9 +8,9 @@
 
 %% API
 -export([
-    get_coverage/3,
+    get_coverage/1,
     get_blacklist/0,
-    get_delivery_status/4,
+    get_sms_status/3,
     retrieve_sms/4,
     request_credit/2,
 
@@ -28,7 +28,6 @@
 
 -type customer_id() :: binary().
 -type user_id()     :: binary().
--type version()     :: binary().
 -type request_id()  :: binary().
 -type src_addr()    :: binary().
 -type dst_addr()    :: binary().
@@ -43,22 +42,20 @@ start_link() ->
     {ok, QueueName} = application:get_env(?APP, kelly_api_queue),
     rmql_rpc_client:start_link(?MODULE, QueueName).
 
--spec get_coverage(customer_id(), user_id(), version()) ->
-    {ok, [#k1api_coverage_response_dto{}]} | {error, term()}.
-get_coverage(CustomerId, UserId, Version) ->
+-spec get_coverage(customer_id()) ->
+    {ok, [#coverage_resp_v1{}]} | {error, term()}.
+get_coverage(CustomerId) ->
     ReqId = uuid:unparse(uuid:generate_time()),
-    Req = #k1api_coverage_request_dto{
-        id = ReqId,
-        customer_id = CustomerId,
-        user_id = UserId,
-        version = Version
+    Req = #coverage_req_v1{
+        req_id = ReqId,
+        customer_id = CustomerId
     },
     ?log_debug("Sending coverage request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
-    case rmql_rpc_client:call(?MODULE, ReqBin, <<"CoverageReq">>) of
+    case rmql_rpc_client:call(?MODULE, ReqBin, <<"CoverageReqV1">>) of
         {ok, RespBin} ->
-            case adto:decode(#k1api_coverage_response_dto{}, RespBin) of
-                {ok, Resp = #k1api_coverage_response_dto{}} ->
+            case adto:decode(#coverage_resp_v1{}, RespBin) of
+                {ok, Resp = #coverage_resp_v1{}} ->
                     ?log_debug("Got coverage response: ~p", [Resp]),
                     {ok, Resp};
                 {error, Error} ->
@@ -71,21 +68,18 @@ get_coverage(CustomerId, UserId, Version) ->
     end.
 
 -spec get_blacklist() ->
-    {ok, [#k1api_blacklist_response_dto{}]} | {error, term()}.
+    {ok, [#blacklist_resp_v1{}]} | {error, term()}.
 get_blacklist() ->
     ReqId = uuid:unparse(uuid:generate_time()),
-    Req = #k1api_blacklist_request_dto{
-        id = ReqId,
-        customer_id = <<>>,
-        user_id = <<>>,
-        version = <<>>
+    Req = #blacklist_req_v1{
+        req_id = ReqId
     },
     ?log_debug("Sending blacklist request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
-    case rmql_rpc_client:call(?MODULE, ReqBin, <<"BlacklistReq">>) of
+    case rmql_rpc_client:call(?MODULE, ReqBin, <<"BlacklistReqV1">>) of
         {ok, RespBin} ->
-            case adto:decode(#k1api_blacklist_response_dto{}, RespBin) of
-                {ok, Resp = #k1api_blacklist_response_dto{}} ->
+            case adto:decode(#blacklist_resp_v1{}, RespBin) of
+                {ok, Resp = #blacklist_resp_v1{}} ->
                     ?log_debug("Got blacklist response: ~p", [Resp]),
                     {ok, Resp};
                 {error, Error} ->
@@ -97,31 +91,30 @@ get_blacklist() ->
             {error, timeout}
     end.
 
--spec get_delivery_status(customer_id(), user_id(), request_id(), src_addr()) ->
-    {ok, [#k1api_sms_delivery_status_response_dto{}]} | {error, term()}.
-get_delivery_status(_CustomerId, _UserId, undefined, _SenderAddr) ->
+-spec get_sms_status(customer_id(), user_id(), request_id()) ->
+    {ok, [#sms_status_resp_v1{}]} | {error, term()}.
+get_sms_status(_CustomerId, _UserId, undefined) ->
     {error, empty_request_id};
-get_delivery_status(_CustomerId, _UserId, <<"">>, _SenderAddr) ->
+get_sms_status(_CustomerId, _UserId, <<"">>) ->
     {error, empty_request_id};
-get_delivery_status(CustomerId, UserId, SmsReqId, SenderAddr) ->
+get_sms_status(CustomerId, UserId, SmsReqId) ->
     ReqId = uuid:unparse(uuid:generate_time()),
-    Req = #k1api_sms_delivery_status_request_dto{
-        id = ReqId,
+    Req = #sms_status_req_v1{
+        req_id = ReqId,
         customer_id = CustomerId,
         user_id = UserId,
-        sms_request_id = SmsReqId,
-        address = SenderAddr
+        sms_req_id = SmsReqId
     },
-    ?log_debug("Sending delivery status request: ~p", [Req]),
+    ?log_debug("Sending sms status request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
-    case rmql_rpc_client:call(?MODULE, ReqBin, <<"DeliveryStatusReq">>) of
+    case rmql_rpc_client:call(?MODULE, ReqBin, <<"SmsStatusReqV1">>) of
         {ok, RespBin} ->
-            case adto:decode(#k1api_sms_delivery_status_response_dto{}, RespBin) of
-                {ok, Resp = #k1api_sms_delivery_status_response_dto{statuses = []}} ->
+            case adto:decode(#sms_status_resp_v1{}, RespBin) of
+                {ok, Resp = #sms_status_resp_v1{statuses = []}} ->
                     ?log_debug("Got delivery status response: ~p", [Resp]),
                     ?log_error("Delivery status response failed with: ~p", [invalid_request_id]),
                     {error, invalid_request_id};
-                {ok, Resp = #k1api_sms_delivery_status_response_dto{}} ->
+                {ok, Resp = #sms_status_resp_v1{}} ->
                     ?log_debug("Got delivery status response: ~p", [Resp]),
                     {ok, Resp};
                 {error, Error} ->
@@ -168,20 +161,20 @@ retrieve_sms(CustomerId, UserId, DestAddr, BatchSize) ->
     {allowed, float()} | {denied, float()} | {error, term()}.
 request_credit(CustomerId, Credit) ->
     ReqId = uuid:unparse(uuid:generate_time()),
-    Req = #k1api_request_credit_request_dto{
-        id = ReqId,
+    Req = #credit_req_v1{
+        req_id = ReqId,
         customer_id = CustomerId,
         credit = Credit
     },
     ?log_debug("Sending request credit request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
-    case rmql_rpc_client:call(?MODULE, ReqBin, <<"RequestCreditReq">>) of
+    case rmql_rpc_client:call(?MODULE, ReqBin, <<"CreditReqV1">>) of
         {ok, RespBin} ->
-            case adto:decode(#k1api_request_credit_response_dto{}, RespBin) of
-                {ok, Resp = #k1api_request_credit_response_dto{}} ->
+            case adto:decode(#credit_resp_v1{}, RespBin) of
+                {ok, Resp = #credit_resp_v1{}} ->
                     ?log_debug("Got request credit response: ~p", [Resp]),
-                    Result = Resp#k1api_request_credit_response_dto.result,
-                    CreditLeft = Resp#k1api_request_credit_response_dto.credit_left,
+                    Result = Resp#credit_resp_v1.result,
+                    CreditLeft = Resp#credit_resp_v1.credit_left,
                     {Result, CreditLeft};
                 {error, Error} ->
                     ?log_error("Request credit response decode error: ~p", [Error]),

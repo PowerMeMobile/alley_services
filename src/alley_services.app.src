@@ -9,8 +9,7 @@
         gproc,
         gsm0338,
         libuuid,
-        alley_common,
-        billy_client
+        alley_common
     ]},
     {mod, {alley_services_app, []}},
     {env, []}
