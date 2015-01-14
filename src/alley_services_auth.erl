@@ -22,15 +22,14 @@ start_link() ->
     rmql_rpc_client:start_link(?MODULE, QueueName).
 
 -spec authenticate(binary(), binary(), atom(), binary()) ->
-    {ok, #auth_resp_v1{}} |
-    {error, timeout}.
-authenticate(CustomerId, UserId, Type, Password) ->
-    case request_backend(CustomerId, UserId, Type, Password) of
+    {ok, #auth_resp_v1{}} | {error, timeout}.
+authenticate(CustomerId, UserId, Interface, Password) ->
+    case request_backend(CustomerId, UserId, Interface, Password) of
         {ok, AuthResp = #auth_resp_v1{result = Result}} ->
             case Result of
                 #auth_customer_v1{} ->
                     ok = alley_services_auth_cache:store(
-                        CustomerId, UserId, Type, Password, AuthResp);
+                        CustomerId, UserId, Interface, Password, AuthResp);
                 #auth_error_v1{} ->
                     ok
             end,
@@ -38,7 +37,7 @@ authenticate(CustomerId, UserId, Type, Password) ->
         {error, timeout} ->
             ?log_debug("Trying auth cache...", []),
             case alley_services_auth_cache:fetch(
-                    CustomerId, UserId, Type, Password) of
+                    CustomerId, UserId, Interface, Password) of
                 {ok, AuthResp} ->
                     ?log_debug("Found auth response: ~p", [AuthResp]),
                     {ok, AuthResp};
@@ -52,14 +51,14 @@ authenticate(CustomerId, UserId, Type, Password) ->
 %% Internal
 %% ===================================================================
 
-request_backend(CustomerId, UserId, Type, Password) ->
+request_backend(CustomerId, UserId, Interface, Password) ->
     ReqId = uuid:unparse(uuid:generate_time()),
     AuthReq = #auth_req_v1{
         req_id = ReqId,
         customer_id = CustomerId,
         user_id = UserId,
         password = Password,
-        connection_type = Type
+        interface = Interface
     },
     ?log_debug("Sending auth request: ~p", [AuthReq]),
     {ok, Payload} = adto:encode(AuthReq),
