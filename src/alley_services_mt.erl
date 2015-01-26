@@ -97,7 +97,7 @@ handle_call({Action, Payload, ReqId, GtwId}, From, St = #st{}) when
                 {[], GtwQueue}
         end,
     Props = [
-        {content_type, <<"SmsRequest">>},
+        {content_type, <<"SmsRequest2">>},
         {delivery_mode, 2},
         {priority, 1},
         {message_id, ReqId},
@@ -140,9 +140,11 @@ code_change(_OldVsn, St, _Extra) ->
 send(fill_coverage_tab, Req) ->
     Customer = Req#send_req.customer,
     Networks = Customer#auth_customer_v1.networks,
-    DefaultProviderId = Customer#auth_customer_v1.default_provider_id,
+    Providers = Customer#auth_customer_v1.providers,
+    DefProvId = Customer#auth_customer_v1.default_provider_id,
     CoverageTab = ets:new(coverage_tab, [private]),
-    alley_services_coverage:fill_coverage_tab(Networks, DefaultProviderId, CoverageTab),
+    alley_services_coverage:fill_coverage_tab(
+        Networks, Providers, DefProvId, CoverageTab),
     send(check_originator, Req#send_req{coverage_tab = CoverageTab});
 
 send(check_originator, Req) ->
@@ -191,10 +193,10 @@ send(route_to_providers, Req) ->
     end;
 
 send(route_to_gateways, Req) ->
-    DestAddrs = Req#send_req.routable,
+    ProvId2Addrs = Req#send_req.routable,
     Customer = Req#send_req.customer,
     Providers = Customer#auth_customer_v1.providers,
-    case alley_services_coverage:route_addrs_to_gateways(DestAddrs, Providers) of
+    case alley_services_coverage:route_addrs_to_gateways(ProvId2Addrs, Providers) of
         {[], _} ->
             {ok, #send_result{result = no_dest_addrs}};
         {GtwId2Addrs, UnroutableToGateways} ->
@@ -203,7 +205,6 @@ send(route_to_gateways, Req) ->
                 rejected = Req#send_req.rejected ++ UnroutableToGateways
             })
     end;
-
 
 %% FIXME: move this logic to clients
 send(process_msg_type, Req) when
@@ -314,6 +315,7 @@ send(define_smpp_params, Req) ->
 
 send(check_billing, Req) ->
     CustomerId = Req#send_req.customer_id,
+
     Price = calc_sending_price(Req),
     ?log_debug("Check billing (customer_id: ~p, sending price: ~p)",
         [CustomerId, Price]),
@@ -337,7 +339,8 @@ send(build_req_dto_s, Req) ->
     ReqId = uuid:unparse(uuid:generate_time()),
     Destinations = Req#send_req.routable,
     ReqDTOs = [
-        build_req_dto(ReqId, GtwId, DestAddrs, Req) || {GtwId, DestAddrs} <- Destinations
+        build_req_dto(ReqId, GtwId, AddrNetIdPrices, Req) ||
+        {GtwId, AddrNetIdPrices} <- Destinations
     ],
     send(publish_dto_s, Req#send_req{req_dto_s = ReqDTOs});
 
@@ -445,15 +448,19 @@ flash(true, default) ->
 flash(true, ucs2) ->
     [{<<"data_coding">>, 248}].
 
-build_req_dto(ReqId, GatewayId, DestAddrs, Req) ->
+build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req) ->
     CustomerId = Req#send_req.customer_id,
-    UserId     = Req#send_req.user_id,
-    Encoding   = Req#send_req.encoding,
-    Encoded    = Req#send_req.encoded,
-    NumberOfSymbols = size(Encoded),
-    NumberOfDests = length(DestAddrs),
-    NumberOfParts = alley_services_utils:calc_parts_number(NumberOfSymbols, Encoding),
-    MessageIds = get_ids(CustomerId, UserId, NumberOfDests, NumberOfParts),
+    UserId = Req#send_req.user_id,
+
+    {DestAddrs, NetIds, Prices} = lists:unzip3(AddrNetIdPrices),
+
+    Encoding = Req#send_req.encoding,
+    Encoded = Req#send_req.encoded,
+    NumOfSymbols = size(Encoded),
+    NumOfDests = length(DestAddrs),
+    NumOfParts = alley_services_utils:calc_parts_number(NumOfSymbols, Encoding),
+    MessageIds = get_ids(CustomerId, UserId, NumOfDests, NumOfParts),
+
     Params = wrap_params(Req#send_req.smpp_params),
 
     #just_sms_request_dto{
@@ -468,7 +475,9 @@ build_req_dto(ReqId, GatewayId, DestAddrs, Req) ->
         params = Params,
         source_addr = Req#send_req.originator,
         dest_addrs = {regular, DestAddrs},
-        message_ids = MessageIds
+        message_ids = MessageIds,
+        network_ids = NetIds,
+        prices = Prices
     }.
 
 get_ids(CustomerId, UserId, NumberOfDests, Parts) ->
@@ -546,27 +555,18 @@ is_deferred(DefDate) ->
     {true, DefDate}.
 
 calc_sending_price(Req) ->
-    Customer = Req#send_req.customer,
-
-    CoverageTab = Req#send_req.coverage_tab,
     GtwId2Addrs = Req#send_req.routable,
-    DestAddrs = lists:flatten([Addr || {_GtwId, Addr} <- GtwId2Addrs]),
-    {NetworkId2Addrs, []} =
-        alley_services_coverage:route_addrs_to_networks(DestAddrs, CoverageTab),
-
-    Networks = Customer#auth_customer_v1.networks,
-    Providers = Customer#auth_customer_v1.providers,
-    DefaultProviderId = Customer#auth_customer_v1.default_provider_id,
-    NetworkId2SmsPrice = alley_services_coverage:build_network_to_sms_price_map(
-        Networks, Providers, DefaultProviderId),
+    AddrNetIdPrices = lists:flatten(
+        [Addrs || {_GtwId, Addrs} <- GtwId2Addrs]),
 
     Encoding = Req#send_req.encoding,
     Encoded = Req#send_req.encoded,
-    NumberOfSymbols = size(Encoded),
-    NumberOfParts = alley_services_utils:calc_parts_number(NumberOfSymbols, Encoding),
-
-    alley_services_coverage:calc_sending_price(
-        NetworkId2Addrs, NetworkId2SmsPrice, NumberOfParts).
+    NumOfSymbols = size(Encoded),
+    NumOfParts = alley_services_utils:calc_parts_number(
+        NumOfSymbols, Encoding),
+    Price = alley_services_coverage:calc_sending_price(
+        AddrNetIdPrices, NumOfParts),
+    Price.
 
 %% FIXME: move this logic to clients
 maybe_binary_to_integer(undefined) ->
