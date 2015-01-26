@@ -17,7 +17,7 @@
     route_addrs_to_providers/2,
     route_addrs_to_gateways/2,
     map_network_id_to_price/3,
-    map_addrs_to_networks_and_prices/3,
+    map_addrs_to_networks_and_prices/2,
     calc_sending_price/2
 ]).
 
@@ -128,10 +128,10 @@ map_network_id_to_price(Networks, Providers, DefProvId) ->
         end,
     network_id_to_price(Networks2, Providers2).
 
--spec map_addrs_to_networks_and_prices([#addr{}], ets:tab(), [{network_id(), price()}]) ->
+-spec map_addrs_to_networks_and_prices([#addr{}], ets:tab()) ->
     {[{#addr{}, network_id(), price()}], [#addr{}]}.
-map_addrs_to_networks_and_prices(Addrs, CoverageTab, NetId2Price) ->
-    map_addrs_to_networks_and_prices(Addrs, CoverageTab, NetId2Price, [], []).
+map_addrs_to_networks_and_prices(Addrs, CoverageTab) ->
+    map_addrs_to_networks_and_prices(Addrs, CoverageTab, [], []).
 
 -spec calc_sending_price([{#addr{}, network_id(), price()}], pos_integer()) -> price().
 calc_sending_price(Addr2NetIdAndPrice, NumOfMsgs) ->
@@ -256,16 +256,15 @@ route_addrs_to_gateways([{ProvId, Addrs} | Rest], Providers, Routable, Unroutabl
             end
     end.
 
-map_addrs_to_networks_and_prices([], _CoverageTab, _NetId2Price, Routable, Unroutable) ->
+map_addrs_to_networks_and_prices([], _CoverageTab, Routable, Unroutable) ->
     {Routable, Unroutable};
-map_addrs_to_networks_and_prices([Addr | Rest], CoverageTab, NetId2Price, Routable, Unroutable) ->
+map_addrs_to_networks_and_prices([Addr | Rest], CoverageTab, Routable, Unroutable) ->
     case alley_services_coverage:which_network(Addr, CoverageTab) of
-        {NetworkId, _MaybeFixedAddr, _ProviderId, _Price} ->
-            Price = proplists:get_value(NetworkId, NetId2Price),
+        {NetworkId, _MaybeFixedAddr, _ProviderId, Price} ->
             Routable2 = [{Addr, NetworkId, Price} | Routable],
-            map_addrs_to_networks_and_prices(Rest, CoverageTab, NetId2Price, Routable2, Unroutable);
+            map_addrs_to_networks_and_prices(Rest, CoverageTab, Routable2, Unroutable);
         undefined ->
-            map_addrs_to_networks_and_prices(Rest, CoverageTab, NetId2Price, Routable, [Addr | Unroutable])
+            map_addrs_to_networks_and_prices(Rest, CoverageTab, Routable, [Addr | Unroutable])
     end.
 
 network_id_to_price(Networks, Providers) ->
