@@ -127,25 +127,25 @@ get_sms_status(CustomerId, UserId, SmsReqId) ->
     end.
 
 -spec retrieve_sms(customer_id(), user_id(), dst_addr(), pos_integer()) ->
-    {ok, [#k1api_retrieve_sms_response_dto{}]} | {error, term()}.
+    {ok, [#retrieve_sms_resp_v1{}]} | {error, term()}.
 retrieve_sms(_CustomerId, _UserId, _DestAddr, BatchSize)
         when is_integer(BatchSize), BatchSize =< 0 ->
     {error, invalid_bax_match_size};
 retrieve_sms(CustomerId, UserId, DestAddr, BatchSize) ->
     ReqId = uuid:unparse(uuid:generate_time()),
-    Req = #k1api_retrieve_sms_request_dto{
-        id = ReqId,
+    Req = #retrieve_sms_req_v1{
+        req_id = ReqId,
         customer_id = CustomerId,
         user_id = UserId,
-        dest_addr = DestAddr,
+        dst_addr = DestAddr,
         batch_size = BatchSize
     },
     ?log_debug("Sending retrieve sms request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
-    case rmql_rpc_client:call(?MODULE, ReqBin, <<"RetrieveSmsReq">>) of
+    case rmql_rpc_client:call(?MODULE, ReqBin, <<"RetrieveSmsReqV1">>) of
         {ok, RespBin} ->
-            case adto:decode(#k1api_retrieve_sms_response_dto{}, RespBin) of
-                {ok, Resp = #k1api_retrieve_sms_response_dto{}} ->
+            case adto:decode(#retrieve_sms_resp_v1{}, RespBin) of
+                {ok, Resp = #retrieve_sms_resp_v1{}} ->
                     ?log_debug("Got retrieve sms response: ~p", [Resp]),
                     {ok, Resp};
                 {error, Error} ->
