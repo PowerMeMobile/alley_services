@@ -315,7 +315,6 @@ send(define_smpp_params, Req) ->
 
 send(check_billing, Req) ->
     CustomerId = Req#send_req.customer_id,
-
     Price = calc_sending_price(Req),
     ?log_debug("Check billing (customer_id: ~p, sending price: ~p)",
         [CustomerId, Price]),
