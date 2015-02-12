@@ -1,4 +1,4 @@
--module(alley_services_mt).
+-module(alley_services_mt_many).
 
 -behaviour(gen_server).
 
@@ -55,7 +55,7 @@ start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 -spec send(#send_req{}) -> {ok, [{K::atom(), V::any()}]}.
-send(Req) ->
+send(Req) when Req#send_req.action =:= send_sms_many ->
     send(fill_coverage_tab, Req).
 
 -spec publish({publish_action(), payload(), req_id(), gateway_id()}) -> ok.
@@ -70,10 +70,10 @@ init([]) ->
     ?MODULE = ets:new(?MODULE, [named_table, ordered_set, {keypos, 2}]),
     case setup_chan(#st{}) of
         {ok, St} ->
-            ?log_info("MT: started", []),
+            ?log_info("MT Many: started", []),
             {ok, St};
         unavailable ->
-            ?log_error("MT: initializing failed (amqp_unavailable). shutdown", []),
+            ?log_error("MT Many: initializing failed (amqp_unavailable). shutdown", []),
             {stop, amqp_unavailable}
     end.
 
@@ -115,7 +115,7 @@ handle_cast(Req, St) ->
     {stop, {unexpected_cast, Req}, St}.
 
 handle_info(#'DOWN'{ref = Ref, info = Info}, St = #st{chan_mon_ref = Ref}) ->
-    ?log_error("MT: amqp channel down (~p)", [Info]),
+    ?log_error("MT Many: amqp channel down (~p)", [Info]),
     {stop, amqp_channel_down, St};
 
 handle_info(Confirm, St) when is_record(Confirm, 'basic.ack');
@@ -127,7 +127,7 @@ handle_info(_Info, St) ->
     {stop, unexpected_info, St}.
 
 terminate(Reason, _St) ->
-    ?log_info("MT: terminated (~p)", [Reason]),
+    ?log_info("MT Many: terminated (~p)", [Reason]),
     ok.
 
 code_change(_OldVsn, St, _Extra) ->
@@ -208,101 +208,44 @@ send(route_to_gateways, Req) ->
 
 %% FIXME: move this logic to clients
 send(process_msg_type, Req) when
-        Req#send_req.message =:= undefined andalso
-        Req#send_req.action =:= send_sms ->
+        Req#send_req.messages =:= undefined orelse
+        Req#send_req.messages =:= [] ->
     {ok, #send_result{result = no_message_body}};
-
-send(process_msg_type, Req) when
-        Req#send_req.message =:= undefined andalso
-        Req#send_req.action =:= send_service_sms ->
-    Name = Req#send_req.s_name,
-    Url = Req#send_req.s_url,
-    case is_binary(Name) andalso is_binary(Url) of
-        true ->
-            Message = <<"<%SERVICEMESSAGE:", Name/binary, ";", Url/binary, "%>">>,
-            send(process_msg_type, Req#send_req{message = Message});
-        false ->
-            {ok, #send_result{result = bad_service_name_or_url}}
-    end;
-
-%% FIXME: move this logic to clients
-send(process_msg_type, Req) when
-        Req#send_req.message =:= undefined andalso
-        Req#send_req.binary_body =:= undefined andalso
-        Req#send_req.action =:= send_binary_sms ->
-    {ok, #send_result{result = no_message_body}};
-
-send(process_msg_type, Req) when
-        Req#send_req.message =:= undefined andalso
-        Req#send_req.action =:= send_binary_sms ->
-    Message = ac_hexdump:hexdump_to_binary(Req#send_req.binary_body),
-    send(define_smpp_params, Req#send_req{
-        message = Message,
-        encoding = default,
-        encoded_size = size(Message)
-    });
 
 send(process_msg_type, Req) ->
-    Message = convert_numbers(Req#send_req.message, Req#send_req.type),
-    send(define_message_encoding, Req#send_req{message = Message});
+    Messages = Req#send_req.messages,
+    Type = Req#send_req.type,
+    Messages2 = [{A, convert_numbers(M, Type)} || {A, M} <- Messages],
+    send(define_message_encoding, Req#send_req{messages = Messages2});
 
 send(define_message_encoding, Req) ->
-    {Encoding, Encoded} =
-        case gsm0338:from_utf8(Req#send_req.message) of
+    Messages = Req#send_req.messages,
+    EncodeFun = fun(Msg) ->
+        case gsm0338:from_utf8(Msg) of
             {valid, Binary} -> {default, Binary};
             {invalid, Binary} -> {ucs2, Binary}
-        end,
+        end
+    end,
+    {Encoding, EncodedSize} =
+        lists:foldl(
+            fun({A, M}, {EingAcc, EedAcc}) ->
+                {Eing, Eed} = EncodeFun(M),
+                {[{A, Eing} | EingAcc], [{A, size(Eed)} | EedAcc]}
+            end,
+            {[], []},
+            Messages
+        ),
     send(define_smpp_params, Req#send_req{
         encoding = Encoding,
-        encoded_size = size(Encoded)
+        encoded_size = EncodedSize
     });
 
-send(define_smpp_params, Req) when Req#send_req.action =:= send_service_sms ->
-    Customer = Req#send_req.customer,
-    ReceiptsAllowed = Customer#auth_customer_v1.receipts_allowed,
-    NoRetry = Customer#auth_customer_v1.no_retry,
-    Validity = fmt_validity(Customer#auth_customer_v1.default_validity),
-    Params = Req#send_req.smpp_params ++ [
-        {<<"registered_delivery">>, ReceiptsAllowed},
-        {<<"service_type">>, <<>>},
-        {<<"no_retry">>, NoRetry},
-        {<<"validity_period">>, Validity},
-        {<<"priority_flag">>, 0},
-        {<<"esm_class">>, 64},
-        {<<"protocol_id">>, 0},
-        {<<"data_coding">>, 245},
-        {<<"source_port">>, 9200},
-        {<<"destination_port">>, 2948}
-    ],
-    send(check_billing, Req#send_req{smpp_params = Params});
-
-send(define_smpp_params, Req) when Req#send_req.action =:= send_binary_sms ->
-    Customer = Req#send_req.customer,
-    ReceiptsAllowed = Customer#auth_customer_v1.receipts_allowed,
-    NoRetry = Customer#auth_customer_v1.no_retry,
-    Validity = fmt_validity(Customer#auth_customer_v1.default_validity),
-    DC = maybe_binary_to_integer(Req#send_req.data_coding),
-    ESMClass = maybe_binary_to_integer(Req#send_req.esm_class),
-    ProtocolId = maybe_binary_to_integer(Req#send_req.protocol_id),
-    Params = Req#send_req.smpp_params ++ [
-        {<<"registered_delivery">>, ReceiptsAllowed},
-        {<<"service_type">>, <<>>},
-        {<<"no_retry">>, NoRetry},
-        {<<"validity_period">>, Validity},
-        {<<"priority_flag">>, 0},
-        {<<"data_coding">>, DC},
-        {<<"esm_class">>, ESMClass},
-        {<<"protocol_id">>, ProtocolId}
-    ],
-    send(check_billing, Req#send_req{smpp_params = Params});
-
 send(define_smpp_params, Req) ->
-    Encoding = Req#send_req.encoding,
     Customer = Req#send_req.customer,
     ReceiptsAllowed = Customer#auth_customer_v1.receipts_allowed,
     NoRetry = Customer#auth_customer_v1.no_retry,
     Validity = fmt_validity(Customer#auth_customer_v1.default_validity),
-    Params = Req#send_req.smpp_params ++ flash(Req#send_req.flash, Encoding) ++ [
+    Params = Req#send_req.smpp_params ++ [
         {<<"registered_delivery">>, ReceiptsAllowed},
         {<<"service_type">>, <<>>},
         {<<"no_retry">>, NoRetry},
@@ -311,7 +254,12 @@ send(define_smpp_params, Req) ->
         {<<"esm_class">>, 3},
         {<<"protocol_id">>, 0}
     ],
-    send(check_billing, Req#send_req{smpp_params = Params});
+    ParamsFun = fun(E) ->
+        [flash(Req#send_req.flash, E) | Params]
+    end,
+    Encoding = Req#send_req.encoding,
+    Params2 = [{A, ParamsFun(E)} || {A, E} <- Encoding],
+    send(check_billing, Req#send_req{smpp_params = Params2});
 
 send(check_billing, Req) ->
     CustomerId = Req#send_req.customer_id,
@@ -337,10 +285,10 @@ send(check_billing, Req) ->
 send(build_req_dto_s, Req) ->
     ReqId = uuid:unparse(uuid:generate_time()),
     Destinations = Req#send_req.routable,
-    ReqDTOs = [
+    ReqDTOs = lists:flatten([
         build_req_dto(ReqId, GtwId, AddrNetIdPrices, Req) ||
         {GtwId, AddrNetIdPrices} <- Destinations
-    ],
+    ]),
     send(publish_dto_s, Req#send_req{req_dto_s = ReqDTOs});
 
 send(publish_dto_s, Req) ->
@@ -352,17 +300,21 @@ send(publish_dto_s, Req) ->
                     ?log_info("mt_srv: defDate -> ~p, timestamp -> ~p", [DefDate, Timestamp]),
                     {ok, Payload} = adto:encode(ReqDTO),
                     ReqId = ReqDTO#just_sms_request_dto.id,
+                    MsgId = hd(ReqDTO#just_sms_request_dto.message_ids),
+                    ReqId2 = <<ReqId/binary, "#", MsgId/binary>>,
                     GtwId = ReqDTO#just_sms_request_dto.gateway_id,
                     ok = alley_services_defer:defer({ReqId, GtwId}, Timestamp,
-                        {publish_just, Payload, ReqId, GtwId}),
-                    ok = publish({publish_kelly, Payload, ReqId, GtwId})
+                        {publish_just, Payload, ReqId2, GtwId}),
+                    ok = publish({publish_kelly, Payload, ReqId2, GtwId})
                 end;
             false ->
                 fun(ReqDTO) ->
                     {ok, Payload} = adto:encode(ReqDTO),
                     ReqId = ReqDTO#just_sms_request_dto.id,
+                    MsgId = hd(ReqDTO#just_sms_request_dto.message_ids),
+                    ReqId2 = <<ReqId/binary, "#", MsgId/binary>>,
                     GtwId = ReqDTO#just_sms_request_dto.gateway_id,
-                    ok = publish({publish, Payload, ReqId, GtwId})
+                    ok = publish({publish, Payload, ReqId2, GtwId})
                 end
         end,
 
@@ -448,35 +400,49 @@ flash(true, ucs2) ->
     [{<<"data_coding">>, 248}].
 
 build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req) ->
+    Encodings = dict:from_list(Req#send_req.encoding),
+    Sizes = dict:from_list(Req#send_req.encoded_size),
+    Messages = dict:from_list(Req#send_req.messages),
+    Params = dict:from_list(Req#send_req.smpp_params),
+    build_just_sms_request(ReqId, GatewayId, Req, AddrNetIdPrices, Messages, Encodings, Sizes, Params, []).
+
+build_just_sms_request(_ReqId, _GatewayId, _Req, [], _Messages, _Encodings, _Sizes, _Params, Acc) ->
+    Acc;
+build_just_sms_request(
+        ReqId, GatewayId, Req,
+        [{Addr, NetId, Price} | AddrNetIdPrices],
+        Messages, Encodings, Sizes, Params, Acc) ->
+
     CustomerId = Req#send_req.customer_id,
     UserId = Req#send_req.user_id,
 
-    {DestAddrs, NetIds, Prices} = lists:unzip3(AddrNetIdPrices),
-
-    Encoding = Req#send_req.encoding,
-    NumOfSymbols = Req#send_req.encoded_size,
-    NumOfDests = length(DestAddrs),
+    Encoding = dict:fetch(Addr, Encodings),
+    Size = dict:fetch(Addr, Sizes),
+    NumOfSymbols = Size,
+    NumOfDests = 1,
     NumOfParts = alley_services_utils:calc_parts_number(NumOfSymbols, Encoding),
-    MessageIds = get_ids(CustomerId, UserId, NumOfDests, NumOfParts),
+    MessageId = get_ids(CustomerId, UserId, NumOfDests, NumOfParts),
+    Params2 = wrap_params(dict:fetch(Addr, Params)),
+    Message = dict:fetch(Addr, Messages),
 
-    Params = wrap_params(Req#send_req.smpp_params),
-
-    #just_sms_request_dto{
+    SmsReq = #just_sms_request_dto{
         id = ReqId,
         gateway_id = GatewayId,
         customer_id = CustomerId,
         user_id = UserId,
         client_type = Req#send_req.client_type,
         type = regular,
-        message = Req#send_req.message,
+        message = Message,
         encoding = Encoding,
-        params = Params,
+        params = Params2,
         source_addr = Req#send_req.originator,
-        dest_addrs = {regular, DestAddrs},
-        message_ids = MessageIds,
-        network_ids = NetIds,
-        prices = Prices
-    }.
+        dest_addrs = {regular, [Addr]},
+        message_ids = MessageId,
+        network_ids = [NetId],
+        prices = [Price]
+    },
+    build_just_sms_request(
+        ReqId, GatewayId, Req, AddrNetIdPrices, Messages, Encodings, Sizes, Params, [SmsReq | Acc]).
 
 get_ids(CustomerId, UserId, NumberOfDests, Parts) ->
     {ok, Ids} = alley_services_db:next_id(CustomerId, UserId, NumberOfDests * Parts),
@@ -558,12 +524,19 @@ calc_sending_price(Req) ->
         [Addrs || {_GtwId, Addrs} <- GtwId2Addrs]),
 
     Encoding = Req#send_req.encoding,
-    NumOfSymbols = Req#send_req.encoded_size,
+    Size = Req#send_req.encoded_size,
+    Price = sum(Encoding, Size, AddrNetIdPrices, 0),
+    Price.
+
+sum([{A, E} | Encs], [{A, S} | Sizes], Addr2Prices, Acc) ->
+    Encoding = E,
+    NumOfSymbols = S,
     NumOfParts = alley_services_utils:calc_parts_number(
         NumOfSymbols, Encoding),
-    Price = alley_services_coverage:calc_sending_price(
-        AddrNetIdPrices, NumOfParts),
-    Price.
+    {A, _NetId, OneMsgPrice} = lists:keyfind(A, 1, Addr2Prices),
+    OneMsgPrice * NumOfParts + Acc;
+sum([], [], _Addr2Prices, Acc) ->
+    Acc.
 
 %% FIXME: move this logic to clients
 maybe_binary_to_integer(undefined) ->
