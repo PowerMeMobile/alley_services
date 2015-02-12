@@ -97,7 +97,7 @@ handle_call({Action, Payload, ReqId, GtwId}, From, St = #st{}) when
                 {[], GtwQueue}
         end,
     Props = [
-        {content_type, <<"SmsRequest2">>},
+        {content_type, <<"SmsReqV1">>},
         {delivery_mode, 2},
         {priority, 1},
         {message_id, ReqId},
@@ -299,33 +299,31 @@ send(publish_dto_s, Req) ->
                 fun(ReqDTO) ->
                     ?log_info("mt_srv: defDate -> ~p, timestamp -> ~p", [DefDate, Timestamp]),
                     {ok, Payload} = adto:encode(ReqDTO),
-                    ReqId = ReqDTO#just_sms_request_dto.id,
-                    MsgId = hd(ReqDTO#just_sms_request_dto.message_ids),
-                    ReqId2 = <<ReqId/binary, "#", MsgId/binary>>,
-                    GtwId = ReqDTO#just_sms_request_dto.gateway_id,
+                    ReqId = ReqDTO#sms_req_v1.req_id,
+                    MsgId = hd(ReqDTO#sms_req_v1.message_ids),
+                    GtwId = ReqDTO#sms_req_v1.gateway_id,
                     ok = alley_services_defer:defer({ReqId, GtwId}, Timestamp,
-                        {publish_just, Payload, ReqId2, GtwId}),
-                    ok = publish({publish_kelly, Payload, ReqId2, GtwId})
+                        {publish_just, Payload, ReqId, GtwId}),
+                    ok = publish({publish_kelly, Payload, ReqId, GtwId})
                 end;
             false ->
                 fun(ReqDTO) ->
                     {ok, Payload} = adto:encode(ReqDTO),
-                    ReqId = ReqDTO#just_sms_request_dto.id,
-                    MsgId = hd(ReqDTO#just_sms_request_dto.message_ids),
-                    ReqId2 = <<ReqId/binary, "#", MsgId/binary>>,
-                    GtwId = ReqDTO#just_sms_request_dto.gateway_id,
-                    ok = publish({publish, Payload, ReqId2, GtwId})
+                    ReqId = ReqDTO#sms_req_v1.req_id,
+                    MsgId = hd(ReqDTO#sms_req_v1.message_ids),
+                    GtwId = ReqDTO#sms_req_v1.gateway_id,
+                    ok = publish({publish, Payload, ReqId, GtwId})
                 end
         end,
 
     ReqDTOs = Req#send_req.req_dto_s,
-    ReqId = (hd(ReqDTOs))#just_sms_request_dto.id,
+    ReqId = (hd(ReqDTOs))#sms_req_v1.req_id,
 
     lists:foreach(
         fun(ReqDTO) ->
             ?log_debug("Sending submit request: ~p", [ReqDTO]),
-            PublishFun(ReqDTO),
-            alley_services_pdu_logger:log(ReqDTO)
+            PublishFun(ReqDTO)%,
+            %alley_services_pdu_logger:log(ReqDTO)
         end,
         ReqDTOs
     ),
@@ -404,45 +402,53 @@ build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req) ->
     Sizes = dict:from_list(Req#send_req.encoded_size),
     Messages = dict:from_list(Req#send_req.messages),
     Params = dict:from_list(Req#send_req.smpp_params),
-    build_just_sms_request(ReqId, GatewayId, Req, AddrNetIdPrices, Messages, Encodings, Sizes, Params, []).
+    build_sms_req_v1(ReqId, GatewayId, Req, AddrNetIdPrices, Messages, Encodings, Sizes, Params).
 
-build_just_sms_request(_ReqId, _GatewayId, _Req, [], _Messages, _Encodings, _Sizes, _Params, Acc) ->
-    Acc;
-build_just_sms_request(
+build_sms_req_v1(
         ReqId, GatewayId, Req,
-        [{Addr, NetId, Price} | AddrNetIdPrices],
-        Messages, Encodings, Sizes, Params, Acc) ->
+        AddrNetIdPrices, Messages, Encodings, Sizes, Params) ->
+
+    {DestAddrs, NetIds, Prices} = lists:unzip3(AddrNetIdPrices),
 
     CustomerId = Req#send_req.customer_id,
     UserId = Req#send_req.user_id,
 
-    Encoding = dict:fetch(Addr, Encodings),
-    Size = dict:fetch(Addr, Sizes),
-    NumOfSymbols = Size,
-    NumOfDests = 1,
-    NumOfParts = alley_services_utils:calc_parts_number(NumOfSymbols, Encoding),
-    MessageId = get_ids(CustomerId, UserId, NumOfDests, NumOfParts),
-    Params2 = wrap_params(dict:fetch(Addr, Params)),
-    Message = dict:fetch(Addr, Messages),
+    %
+    Encodings2 = [dict:fetch(A, Encodings) || A <- DestAddrs],
 
-    SmsReq = #just_sms_request_dto{
-        id = ReqId,
+    %
+    MsgIdFun = fun(A) ->
+        Size = dict:fetch(A, Sizes),
+        Encoding = dict:fetch(A, Encodings),
+        NumOfSymbols = Size,
+        NumOfDests = 1,
+        NumOfParts = alley_services_utils:calc_parts_number(NumOfSymbols, Encoding),
+        MessageId = get_ids(CustomerId, UserId, NumOfDests, NumOfParts)
+    end,
+    MessageIds = [MsgIdFun(A) || A <- DestAddrs],
+
+    %
+    Params2 = [wrap_params(dict:fetch(A, Params)) || A <- DestAddrs],
+
+    %
+    Messages2 = [dict:fetch(A, Messages) || A <- DestAddrs],
+
+    #sms_req_v1{
+        req_id = ReqId,
         gateway_id = GatewayId,
         customer_id = CustomerId,
         user_id = UserId,
-        client_type = Req#send_req.client_type,
+        interface = Req#send_req.client_type,
         type = regular,
-        message = Message,
-        encoding = Encoding,
-        params = Params2,
+        messages = Messages2,
+        encodings = Encodings2,
+        paramss = Params2,
         source_addr = Req#send_req.originator,
-        dest_addrs = {regular, [Addr]},
-        message_ids = MessageId,
-        network_ids = [NetId],
-        prices = [Price]
-    },
-    build_just_sms_request(
-        ReqId, GatewayId, Req, AddrNetIdPrices, Messages, Encodings, Sizes, Params, [SmsReq | Acc]).
+        dest_addrs = {regular, DestAddrs},
+        message_ids = MessageIds,
+        network_ids = NetIds,
+        prices = Prices
+    }.
 
 get_ids(CustomerId, UserId, NumberOfDests, Parts) ->
     {ok, Ids} = alley_services_db:next_id(CustomerId, UserId, NumberOfDests * Parts),
@@ -466,7 +472,7 @@ wrap_params(Params) ->
         (Int) when is_integer(Int) ->
             {integer, Int}
     end,
-    [#just_sms_request_param_dto{name = N, value = Tag(V)} || {N, V} <- Params].
+    [#sms_req_param{name = N, value = Tag(V)} || {N, V} <- Params].
 
 fmt_validity(SecondsTotal) ->
     MinutesTotal = SecondsTotal div 60,
