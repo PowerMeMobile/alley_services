@@ -246,13 +246,13 @@ send(define_smpp_params, Req) ->
     NoRetry = Customer#auth_customer_v1.no_retry,
     Validity = fmt_validity(Customer#auth_customer_v1.default_validity),
     Params = Req#send_req.smpp_params ++ [
-        {<<"registered_delivery">>, ReceiptsAllowed},
-        {<<"service_type">>, <<>>},
-        {<<"no_retry">>, NoRetry},
-        {<<"validity_period">>, Validity},
-        {<<"priority_flag">>, 0},
-        {<<"esm_class">>, 3},
-        {<<"protocol_id">>, 0}
+        {registered_delivery, ReceiptsAllowed},
+        {service_type, <<>>},
+        {no_retry, NoRetry},
+        {validity_period, Validity},
+        {priority_flag, 0},
+        {esm_class, 3},
+        {protocol_id, 0}
     ],
     ParamsFun = fun(E) ->
         [flash(Req#send_req.flash, E) | Params]
@@ -300,7 +300,6 @@ send(publish_dto_s, Req) ->
                     ?log_info("mt_srv: defDate -> ~p, timestamp -> ~p", [DefDate, Timestamp]),
                     {ok, Payload} = adto:encode(ReqDTO),
                     ReqId = ReqDTO#sms_req_v1.req_id,
-                    MsgId = hd(ReqDTO#sms_req_v1.message_ids),
                     GtwId = ReqDTO#sms_req_v1.gateway_id,
                     ok = alley_services_defer:defer({ReqId, GtwId}, Timestamp,
                         {publish_just, Payload, ReqId, GtwId}),
@@ -310,7 +309,6 @@ send(publish_dto_s, Req) ->
                 fun(ReqDTO) ->
                     {ok, Payload} = adto:encode(ReqDTO),
                     ReqId = ReqDTO#sms_req_v1.req_id,
-                    MsgId = hd(ReqDTO#sms_req_v1.message_ids),
                     GtwId = ReqDTO#sms_req_v1.gateway_id,
                     ok = publish({publish, Payload, ReqId, GtwId})
                 end
@@ -393,9 +391,9 @@ setup_chan(St = #st{}) ->
 flash(false, _) ->
     [];
 flash(true, default) ->
-    [{<<"data_coding">>, 240}];
+    [{data_coding, 240}];
 flash(true, ucs2) ->
-    [{<<"data_coding">>, 248}].
+    [{data_coding, 248}].
 
 build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req) ->
     Encodings = dict:from_list(Req#send_req.encoding),
@@ -421,14 +419,13 @@ build_sms_req_v1(
         Size = dict:fetch(A, Sizes),
         Encoding = dict:fetch(A, Encodings),
         NumOfSymbols = Size,
-        NumOfDests = 1,
         NumOfParts = alley_services_utils:calc_parts_number(NumOfSymbols, Encoding),
-        MessageId = get_ids(CustomerId, UserId, NumOfDests, NumOfParts)
+        get_id(CustomerId, UserId, NumOfParts)
     end,
-    MessageIds = [MsgIdFun(A) || A <- DestAddrs],
+    InMsgIds = [MsgIdFun(A) || A <- DestAddrs],
 
     %
-    Params2 = [wrap_params(dict:fetch(A, Params)) || A <- DestAddrs],
+    Params2 = [dict:fetch(A, Params) || A <- DestAddrs],
 
     %
     Messages2 = [dict:fetch(A, Messages) || A <- DestAddrs],
@@ -439,40 +436,25 @@ build_sms_req_v1(
         customer_id = CustomerId,
         user_id = UserId,
         interface = Req#send_req.client_type,
+        src_addr = Req#send_req.originator,
         type = regular,
-        messages = Messages2,
+
+        %%
         encodings = Encodings2,
+        %%
+
+        dst_addrs = DestAddrs,
+        in_msg_ids = InMsgIds,
+        messages = Messages2,
         paramss = Params2,
-        source_addr = Req#send_req.originator,
-        dest_addrs = {regular, DestAddrs},
-        message_ids = MessageIds,
-        network_ids = NetIds,
+        net_ids = NetIds,
         prices = Prices
     }.
 
-get_ids(CustomerId, UserId, NumberOfDests, Parts) ->
-    {ok, Ids} = alley_services_db:next_id(CustomerId, UserId, NumberOfDests * Parts),
-    {DTOIds, []} =
-        lists:foldl(
-          fun(Id, {Acc, Group}) when (length(Group) + 1) =:= Parts ->
-                  StrId = integer_to_list(Id),
-                  GroupIds = list_to_binary(string:join(lists:reverse([StrId | Group]), ":")),
-                  {[GroupIds | Acc], []};
-             (Id, {Acc, Group}) ->
-                  {Acc, [integer_to_list(Id) | Group]}
-          end, {[], []}, Ids),
-    DTOIds.
-
-wrap_params(Params) ->
-    Tag = fun
-        (Str) when is_binary(Str) ->
-            {string, Str};
-        (Bool) when is_boolean(Bool) ->
-            {boolean, Bool};
-        (Int) when is_integer(Int) ->
-            {integer, Int}
-    end,
-    [#sms_req_param{name = N, value = Tag(V)} || {N, V} <- Params].
+get_id(CustomerId, UserId, Parts) ->
+    {ok, Ids} = alley_services_db:next_id(CustomerId, UserId, Parts),
+    Ids2 = [integer_to_list(Id) || Id <- Ids],
+    list_to_binary(string:join(Ids2, ":")).
 
 fmt_validity(SecondsTotal) ->
     MinutesTotal = SecondsTotal div 60,
@@ -540,7 +522,7 @@ sum([{A, E} | Encs], [{A, S} | Sizes], Addr2Prices, Acc) ->
     NumOfParts = alley_services_utils:calc_parts_number(
         NumOfSymbols, Encoding),
     {A, _NetId, OneMsgPrice} = lists:keyfind(A, 1, Addr2Prices),
-    OneMsgPrice * NumOfParts + Acc;
+    sum(Encs, Sizes, Addr2Prices, OneMsgPrice * NumOfParts + Acc);
 sum([], [], _Addr2Prices, Acc) ->
     Acc.
 
