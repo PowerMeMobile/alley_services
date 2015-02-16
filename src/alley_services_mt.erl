@@ -243,7 +243,8 @@ send(process_msg_type, Req) when
     });
 
 send(process_msg_type, Req) ->
-    Message = convert_numbers(Req#send_req.message, Req#send_req.type),
+    Message = alley_services_utils:convert_arabic_numbers(
+        Req#send_req.message, Req#send_req.type),
     send(define_message_encoding, Req#send_req{message = Message});
 
 send(define_message_encoding, Req) ->
@@ -261,7 +262,7 @@ send(define_smpp_params, Req) when Req#send_req.action =:= send_service_sms ->
     Customer = Req#send_req.customer,
     ReceiptsAllowed = Customer#auth_customer_v1.receipts_allowed,
     NoRetry = Customer#auth_customer_v1.no_retry,
-    Validity = fmt_validity(Customer#auth_customer_v1.default_validity),
+    Validity = alley_services_utils:fmt_validity(Customer#auth_customer_v1.default_validity),
     Params = Req#send_req.smpp_params ++ [
         {<<"registered_delivery">>, ReceiptsAllowed},
         {<<"service_type">>, <<>>},
@@ -280,7 +281,7 @@ send(define_smpp_params, Req) when Req#send_req.action =:= send_binary_sms ->
     Customer = Req#send_req.customer,
     ReceiptsAllowed = Customer#auth_customer_v1.receipts_allowed,
     NoRetry = Customer#auth_customer_v1.no_retry,
-    Validity = fmt_validity(Customer#auth_customer_v1.default_validity),
+    Validity = alley_services_utils:fmt_validity(Customer#auth_customer_v1.default_validity),
     DC = maybe_binary_to_integer(Req#send_req.data_coding),
     ESMClass = maybe_binary_to_integer(Req#send_req.esm_class),
     ProtocolId = maybe_binary_to_integer(Req#send_req.protocol_id),
@@ -301,7 +302,7 @@ send(define_smpp_params, Req) ->
     Customer = Req#send_req.customer,
     ReceiptsAllowed = Customer#auth_customer_v1.receipts_allowed,
     NoRetry = Customer#auth_customer_v1.no_retry,
-    Validity = fmt_validity(Customer#auth_customer_v1.default_validity),
+    Validity = alley_services_utils:fmt_validity(Customer#auth_customer_v1.default_validity),
     Params = Req#send_req.smpp_params ++ flash(Req#send_req.flash, Encoding) ++ [
         {<<"registered_delivery">>, ReceiptsAllowed},
         {<<"service_type">>, <<>>},
@@ -346,7 +347,7 @@ send(build_req_dto_s, Req) ->
 send(publish_dto_s, Req) ->
     DefDate = Req#send_req.def_date,
     PublishFun =
-        case is_deferred(DefDate) of
+        case alley_services_defer:is_deferred(DefDate) of
             {true, Timestamp} ->
                 fun(ReqDTO) ->
                     ?log_info("mt_srv: defDate -> ~p, timestamp -> ~p", [DefDate, Timestamp]),
@@ -501,56 +502,6 @@ wrap_params(Params) ->
             {integer, Int}
     end,
     [#just_sms_request_param_dto{name = N, value = Tag(V)} || {N, V} <- Params].
-
-fmt_validity(SecondsTotal) ->
-    MinutesTotal = SecondsTotal div 60,
-    HoursTotal = MinutesTotal div 60,
-    DaysTotal = HoursTotal div 24,
-    MonthsTotal = DaysTotal div 30,
-    Years = MonthsTotal div 12,
-    Seconds = SecondsTotal rem 60,
-    Minutes = MinutesTotal rem 60,
-    Hours = HoursTotal rem 24,
-    Days = DaysTotal rem 30,
-    Months = MonthsTotal rem 12,
-    StringValidity =
-        lists:flatten(io_lib:format("~2..0w~2..0w~2..0w~2..0w~2..0w~2..0w000R",
-                  [Years, Months, Days, Hours, Minutes, Seconds])),
-    list_to_binary(StringValidity).
-
-convert_numbers(Text, <<"ArabicWithArabicNumbers">>) ->
-    case unicode:characters_to_list(Text, utf8) of
-        CodePoints when is_list(CodePoints) ->
-            ConvCP = [number_to_arabic(CP) || CP <- CodePoints],
-            unicode:characters_to_binary(ConvCP, utf8);
-        {error, CodePoints, RestData} ->
-            ?log_error("mt_srv: Arabic numbers to hindi error. Original: ~w Codepoints: ~w Rest: ~w",
-                [Text, CodePoints, RestData]),
-            erlang:error("Illegal utf8 symbols");
-        {incomplete, CodePoints, IncompleteSeq} ->
-            ?log_error("mt_srv: Incomplete utf8 sequence. Original: ~w Codepoints: ~w IncompleteSeq: ~w",
-                [Text, CodePoints, IncompleteSeq]),
-            erlang:error("Incomplite utf8 sequence")
-    end;
-convert_numbers(Text, _) ->
-    Text.
-
-number_to_arabic(16#0030) -> 16#0660;
-number_to_arabic(16#0031) -> 16#0661;
-number_to_arabic(16#0032) -> 16#0662;
-number_to_arabic(16#0033) -> 16#0663;
-number_to_arabic(16#0034) -> 16#0664;
-number_to_arabic(16#0035) -> 16#0665;
-number_to_arabic(16#0036) -> 16#0666;
-number_to_arabic(16#0037) -> 16#0667;
-number_to_arabic(16#0038) -> 16#0668;
-number_to_arabic(16#0039) -> 16#0669;
-number_to_arabic(Any) -> Any.
-
-is_deferred(undefined) ->
-    false;
-is_deferred(DefDate) ->
-    {true, DefDate}.
 
 calc_sending_price(Req) ->
     GtwId2Addrs = Req#send_req.routable,

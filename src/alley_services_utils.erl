@@ -2,7 +2,9 @@
 
 -export([
     addr_to_dto/1,
-    calc_parts_number/2
+    calc_parts_number/2,
+    convert_arabic_numbers/2,
+    fmt_validity/1
 ]).
 
 %-define(TEST, 1).
@@ -12,6 +14,7 @@
 -endif.
 
 -include_lib("alley_dto/include/adto.hrl").
+-include_lib("alley_common/include/logging.hrl").
 
 -define(TON_UNKNOWN,       0).
 -define(TON_INTERNATIONAL, 1).
@@ -71,6 +74,53 @@ calc_parts_number(Size, ucs2) ->
         true ->  trunc(Size/67);
         false -> trunc(Size/67) + 1
     end.
+
+-spec convert_arabic_numbers(binary(), to_arabic | to_latin) -> binary().
+convert_arabic_numbers(Text, to_arabic) ->
+    case unicode:characters_to_list(Text, utf8) of
+        CodePoints when is_list(CodePoints) ->
+            ConvCP = [number_to_arabic(CP) || CP <- CodePoints],
+            unicode:characters_to_binary(ConvCP, utf8);
+        {error, CodePoints, RestData} ->
+            ?log_error("mt_srv: Arabic numbers to hindi error. Original: ~w Codepoints: ~w Rest: ~w",
+                [Text, CodePoints, RestData]),
+            erlang:error("Illegal utf8 symbols");
+        {incomplete, CodePoints, IncompleteSeq} ->
+            ?log_error("mt_srv: Incomplete utf8 sequence. Original: ~w Codepoints: ~w IncompleteSeq: ~w",
+                [Text, CodePoints, IncompleteSeq]),
+            erlang:error("Incomplite utf8 sequence")
+    end;
+convert_arabic_numbers(Text, _) ->
+    Text.
+
+number_to_arabic(16#0030) -> 16#0660;
+number_to_arabic(16#0031) -> 16#0661;
+number_to_arabic(16#0032) -> 16#0662;
+number_to_arabic(16#0033) -> 16#0663;
+number_to_arabic(16#0034) -> 16#0664;
+number_to_arabic(16#0035) -> 16#0665;
+number_to_arabic(16#0036) -> 16#0666;
+number_to_arabic(16#0037) -> 16#0667;
+number_to_arabic(16#0038) -> 16#0668;
+number_to_arabic(16#0039) -> 16#0669;
+number_to_arabic(Any) -> Any.
+
+-spec fmt_validity(non_neg_integer()) -> binary().
+fmt_validity(SecondsTotal) ->
+    MinutesTotal = SecondsTotal div 60,
+    HoursTotal = MinutesTotal div 60,
+    DaysTotal = HoursTotal div 24,
+    MonthsTotal = DaysTotal div 30,
+    Years = MonthsTotal div 12,
+    Seconds = SecondsTotal rem 60,
+    Minutes = MinutesTotal rem 60,
+    Hours = HoursTotal rem 24,
+    Days = DaysTotal rem 30,
+    Months = MonthsTotal rem 12,
+    StringValidity =
+        lists:flatten(io_lib:format("~2..0w~2..0w~2..0w~2..0w~2..0w~2..0w000R",
+                  [Years, Months, Days, Hours, Minutes, Seconds])),
+    list_to_binary(StringValidity).
 
 %% ===================================================================
 %% Begin Tests

@@ -7,7 +7,8 @@
 %% API
 -export([
     start_link/0,
-    defer/3
+    defer/3,
+    is_deferred/1
 ]).
 
 %% Service API
@@ -44,6 +45,12 @@ start_link() ->
 -spec defer(term(), ac_datetime:timestamp(), term()) -> ok.
 defer(Id, Timestamp, Req) ->
     gen_server:call(?MODULE, {defer, Id, Timestamp, Req}).
+
+-spec is_deferred(undefined | os:timestamp()) -> boolean().
+is_deferred(undefined) ->
+    false;
+is_deferred(DefDate) ->
+    {true, DefDate}.
 
 %% ===================================================================
 %% Service API
