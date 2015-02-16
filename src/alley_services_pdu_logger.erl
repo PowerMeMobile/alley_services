@@ -56,8 +56,8 @@
 %% ===================================================================
 
 -spec start_link(binary(), binary()) -> {ok, pid()}.
-start_link(CustomerID, UserID) ->
-    gen_server:start_link(?MODULE, {CustomerID, UserID}, []).
+start_link(CustomerId, UserId) ->
+    gen_server:start_link(?MODULE, {CustomerId, UserId}, []).
 
 -spec set_loglevel(pid(), log_level()) -> ok.
 set_loglevel(Pid, LogLevel) when
@@ -67,9 +67,9 @@ set_loglevel(Pid, LogLevel) when
 
 -spec set_loglevel(binary(), binary(), log_level()) ->
     ok | {error, logger_not_running}.
-set_loglevel(CustomerID, UserID, LogLevel) when
+set_loglevel(CustomerId, UserId, LogLevel) when
         LogLevel =:= none orelse LogLevel =:= debug ->
-    case gproc:lookup_local_name({CustomerID, UserID}) of
+    case gproc:lookup_local_name({CustomerId, UserId}) of
         undefined ->
             {error, logger_not_running};
         Pid ->
@@ -82,45 +82,42 @@ get_loglevel(Pid) ->
 
 -spec get_loglevel(binary(), binary()) ->
     {ok, log_level()} | {error, logger_not_running}.
-get_loglevel(CustomerID, UserID) ->
-    case gproc:lookup_local_name({CustomerID, UserID}) of
+get_loglevel(CustomerId, UserId) ->
+    case gproc:lookup_local_name({CustomerId, UserId}) of
         undefined ->
             {error, logger_not_running};
         Pid ->
             get_loglevel(Pid)
     end.
 
--spec log(#just_sms_request_dto{}) -> ok.
-log(SmsReq) ->
-    CustomerID = SmsReq#just_sms_request_dto.customer_id,
-    UserID = SmsReq#just_sms_request_dto.user_id,
-    {ok, LoggerPid} =
-    case gproc:lookup_local_name({CustomerID, UserID}) of
-        undefined ->
-            catch(supervisor:start_child(alley_services_pdu_logger_sup, [CustomerID, UserID])),
-            {Pid, _} = gproc:await({n,l,{CustomerID, UserID}}, 5000),
-            {ok, Pid};
-        Pid ->
-            {ok, Pid}
-    end,
-    gen_server:call(LoggerPid, {log_data, fmt_data(SmsReq)}, 30000).
+-spec log(#just_sms_request_dto{} | #sms_req_v1{}) -> ok.
+log(SmsReq = #just_sms_request_dto{
+    customer_id = CustomerId,
+    user_id = UserId
+}) ->
+    do_log(CustomerId, UserId, SmsReq);
+log(SmsReq = #sms_req_v1{
+    customer_id = CustomerId,
+    user_id = UserId
+}) ->
+    do_log(CustomerId, UserId, SmsReq).
 
 %% ===================================================================
 %% gen_server callbacks
 %% ===================================================================
 
-init({CustomerID, UserID}) ->
+init({CustomerId, UserId}) ->
     process_flag(trap_exit, true),
     {ok, LogLevel} = application:get_env(?APP, pdu_log_level),
     {ok, LogSize} = application:get_env(?APP, pdu_log_size),
     ?MODULE:set_loglevel(self(), LogLevel),
     %% To ingore gproc exceptions and CRASH reports in log files
     %% on concurent gproc:add_local_name call
-    try gproc:add_local_name({CustomerID, UserID}) of
+    try gproc:add_local_name({CustomerId, UserId}) of
         true ->
-            ?log_info("pdu_logger: started (~s:~s)", [CustomerID, UserID]),
-            {ok, #st{customer_id = CustomerID,
-                    user_id = UserID,
+            ?log_info("pdu_logger: started (~s:~s)", [CustomerId, UserId]),
+            {ok, #st{customer_id = CustomerId,
+                    user_id = UserId,
                     log_level = none,
                     max_size = LogSize}}
     catch
@@ -201,6 +198,18 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal
 %% ===================================================================
 
+do_log(CustomerId, UserId, SmsReq) ->
+    {ok, LoggerPid} =
+        case gproc:lookup_local_name({CustomerId, UserId}) of
+            undefined ->
+                catch(supervisor:start_child(alley_services_pdu_logger_sup, [CustomerId, UserId])),
+                {Pid, _} = gproc:await({n,l,{CustomerId, UserId}}, 5000),
+                {ok, Pid};
+            Pid ->
+                {ok, Pid}
+        end,
+    gen_server:call(LoggerPid, {log_data, fmt_kv(fmt_data(SmsReq))}, 30000).
+
 open_log_file(St) ->
     {Date, Time} = calendar:local_time(),
     Filename = new_file_name(Date, Time, St),
@@ -265,25 +274,27 @@ fmt_time({H, M, S}) ->
 %% Format data
 %% ===================================================================
 
--spec fmt_data(#just_sms_request_dto{}) -> binary().
+-spec fmt_data(#just_sms_request_dto{} | #sms_req_v1{}) -> [{term(), term()}].
 fmt_data(SmsReq = #just_sms_request_dto{}) ->
     Fields = record_info(fields, just_sms_request_dto),
-    PrettyParams = prettify_params(SmsReq),
+    Fun =
+        fun(#just_sms_request_param_dto{name = Key, value = {_Type, Value}}) ->
+            {Key, Value}
+        end,
+    Params = [Fun(P) || P <- SmsReq#just_sms_request_dto.params],
     [_ | Values] =
-        tuple_to_list(SmsReq#just_sms_request_dto{params = PrettyParams}),
-    KV = lists:zip(Fields, Values),
+        tuple_to_list(SmsReq#just_sms_request_dto{params = Params}),
+    lists:zip(Fields, Values);
+fmt_data(SmsReq = #sms_req_v1{}) ->
+    Fields = record_info(fields, sms_req_v1),
+    [_ | Values] = tuple_to_list(SmsReq),
+    lists:zip(Fields, Values).
 
+-spec fmt_kv([{term(), term()}]) -> binary().
+fmt_kv(KV) ->
     TimeStamp = {_, _, MilSec} = ac_datetime:utc_timestamp(),
     {{Year, Month, Day}, {Hour, Min, Sec}} = calendar:now_to_local_time(TimeStamp),
     TimeFmt =
         io_lib:format("~w-~2..0w-~2..0w ~2..0w:~2..0w:~2..0w.~3..0w > ",
             [Year, Month, Day, Hour, Min, Sec, (MilSec rem 1000)]),
-
     [[io_lib:format("~s~w: ~p~n", [TimeFmt, K, V]) || {K, V} <- KV] | "\n"].
-
-prettify_params(SmsReq) ->
-    [{Key, Value} || #just_sms_request_param_dto{
-                name = Key,
-                value = {_Type, Value}
-                } <- SmsReq#just_sms_request_dto.params].
-

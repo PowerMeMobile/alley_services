@@ -254,9 +254,7 @@ send(define_smpp_params, Req) ->
         {esm_class, 3},
         {protocol_id, 0}
     ],
-    ParamsFun = fun(E) ->
-        [flash(Req#send_req.flash, E) | Params]
-    end,
+    ParamsFun = fun(E) -> flash(Req#send_req.flash, E) ++ Params end,
     Encoding = Req#send_req.encoding,
     Params2 = [{A, ParamsFun(E)} || {A, E} <- Encoding],
     send(check_billing, Req#send_req{smpp_params = Params2});
@@ -320,8 +318,8 @@ send(publish_dto_s, Req) ->
     lists:foreach(
         fun(ReqDTO) ->
             ?log_debug("Sending submit request: ~p", [ReqDTO]),
-            PublishFun(ReqDTO)%,
-            %alley_services_pdu_logger:log(ReqDTO)
+            PublishFun(ReqDTO),
+            alley_services_pdu_logger:log(ReqDTO)
         end,
         ReqDTOs
     ),
