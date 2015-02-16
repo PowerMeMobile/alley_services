@@ -410,11 +410,7 @@ build_sms_req_v1(
 
     CustomerId = Req#send_req.customer_id,
     UserId = Req#send_req.user_id,
-
-    %
     Encodings2 = [dict:fetch(A, Encodings) || A <- DestAddrs],
-
-    %
     MsgIdFun = fun(A) ->
         Size = dict:fetch(A, Sizes),
         Encoding = dict:fetch(A, Encodings),
@@ -423,11 +419,7 @@ build_sms_req_v1(
         get_id(CustomerId, UserId, NumOfParts)
     end,
     InMsgIds = [MsgIdFun(A) || A <- DestAddrs],
-
-    %
     Params2 = [dict:fetch(A, Params) || A <- DestAddrs],
-
-    %
     Messages2 = [dict:fetch(A, Messages) || A <- DestAddrs],
 
     #sms_req_v1{
@@ -436,17 +428,13 @@ build_sms_req_v1(
         customer_id = CustomerId,
         user_id = UserId,
         interface = Req#send_req.client_type,
-        src_addr = Req#send_req.originator,
         type = regular,
-
-        %%
-        encodings = Encodings2,
-        %%
-
+        src_addr = Req#send_req.originator,
         dst_addrs = DestAddrs,
         in_msg_ids = InMsgIds,
+        encodings = Encodings2,
         messages = Messages2,
-        paramss = Params2,
+        params_s = Params2,
         net_ids = NetIds,
         prices = Prices
     }.
