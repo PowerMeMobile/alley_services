@@ -47,7 +47,7 @@
 
 -record(log, {
     resp_code :: non_neg_integer(),
-    resp_headers :: list(),
+    resp_headers :: cowboy:http_headers(),
     resp_body :: binary(),
     req :: cowboy_req:req(),
     req_body :: binary()
@@ -63,9 +63,9 @@ start_link() ->
 
 -spec set_loglevel(log_level()) -> ok.
 set_loglevel(LogLevel) when
-                LogLevel =:= none orelse
-                LogLevel =:= info orelse
-                LogLevel =:= debug ->
+        LogLevel =:= none orelse
+        LogLevel =:= info orelse
+        LogLevel =:= debug ->
     gen_server:cast(?MODULE, {set_loglevel, LogLevel}).
 
 -spec get_loglevel() -> {ok, log_level()} | {error, term()}.
@@ -76,8 +76,7 @@ get_loglevel() ->
 %% Cowboy onresponse hook callback
 %% ===================================================================
 
--spec log(  non_neg_integer(), list(), binary(),
-            cowboy_req:req(), binary()) -> ok.
+-spec log(non_neg_integer(), list(), binary(), cowboy_req:req(), binary()) -> ok.
 log(RespCode, RespHeaders, RespBody, Req, ReqBody) ->
     LogTask = #log{
         resp_code = RespCode,
@@ -234,12 +233,14 @@ fmt_time({H, M, S}) ->
 -spec fmt_data(#log{}, log_level()) -> binary().
 fmt_data(LD = #log{req_body = <<>>}, debug) ->
     ApacheFmt = fmt_apache_log(LD),
-    io_lib:format("~sResponse body:~n~s~n",
-        [ApacheFmt, LD#log.resp_body]);
+    Resp = LD#log.resp_body,
+    io_lib:format("~sResponse body:~n~s~n", [ApacheFmt, Resp]);
 fmt_data(LD = #log{}, debug) ->
     ApacheFmt = fmt_apache_log(LD),
+    Req = LD#log.req_body,
+    Resp = LD#log.resp_body,
     io_lib:format("~sRequest body:~n~s~nResponse body:~n~s~n",
-        [ApacheFmt, LD#log.req_body, LD#log.resp_body]);
+        [ApacheFmt, Req, Resp]);
 fmt_data(LD = #log{}, info) ->
     fmt_apache_log(LD).
 
