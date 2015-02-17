@@ -216,7 +216,8 @@ try_match_network(Number, [Prefix | Prefixes], Tab) ->
     end.
 
 route_addrs_to_providers([], _CoverageTab, Routable, Unroutable) ->
-    {dict:to_list(Routable), Unroutable};
+    Routable2 = [{P, lists:reverse(As)} || {P, As} <- dict:to_list(Routable)],
+    {Routable2, Unroutable};
 route_addrs_to_providers([Addr | Rest], CoverageTab, Routable, Unroutable) ->
     case alley_services_coverage:which_network(Addr, CoverageTab) of
         {NetId, MaybeFixedAddr, ProvId, Price} ->
