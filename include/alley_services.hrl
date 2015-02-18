@@ -17,7 +17,6 @@
     recipients   :: [#addr{}],
     message      :: undefined | binary(),
     messages     :: undefined | [binary()],
-    type         :: undefined | binary(),
     def_date     :: undefined | binary(),
     flash        :: undefined | boolean(),
     smpp_params = [] :: [{binary(), binary() | boolean() | integer()}],

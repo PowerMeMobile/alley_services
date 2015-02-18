@@ -209,11 +209,6 @@ send(route_to_gateways, Req) ->
 %% FIXME: move this logic to clients
 send(process_msg_type, Req) when
         Req#send_req.message =:= undefined andalso
-        Req#send_req.action =:= send_sms ->
-    {ok, #send_result{result = no_message_body}};
-
-send(process_msg_type, Req) when
-        Req#send_req.message =:= undefined andalso
         Req#send_req.action =:= send_service_sms ->
     Name = Req#send_req.s_name,
     Url = Req#send_req.s_url,
@@ -232,6 +227,7 @@ send(process_msg_type, Req) when
         Req#send_req.action =:= send_binary_sms ->
     {ok, #send_result{result = no_message_body}};
 
+%% FIXME: move this logic to clients
 send(process_msg_type, Req) when
         Req#send_req.message =:= undefined andalso
         Req#send_req.action =:= send_binary_sms ->
@@ -243,9 +239,7 @@ send(process_msg_type, Req) when
     });
 
 send(process_msg_type, Req) ->
-    Message = alley_services_utils:convert_arabic_numbers(
-        Req#send_req.message, Req#send_req.type),
-    send(define_message_encoding, Req#send_req{message = Message});
+    send(define_message_encoding, Req);
 
 send(define_message_encoding, Req) ->
     {Encoding, Encoded} =

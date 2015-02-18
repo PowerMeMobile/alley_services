@@ -200,23 +200,11 @@ send(route_to_gateways, Req) ->
         {[], _} ->
             {ok, #send_result{result = no_dest_addrs}};
         {GtwId2Addrs, UnroutableToGateways} ->
-            send(process_msg_type, Req#send_req{
+            send(define_message_encoding, Req#send_req{
                 routable = GtwId2Addrs,
                 rejected = Req#send_req.rejected ++ UnroutableToGateways
             })
     end;
-
-%% FIXME: move this logic to clients
-send(process_msg_type, Req) when
-        Req#send_req.messages =:= undefined orelse
-        Req#send_req.messages =:= [] ->
-    {ok, #send_result{result = no_message_body}};
-
-send(process_msg_type, Req) ->
-    Messages = Req#send_req.messages,
-    Type = Req#send_req.type,
-    Messages2 = [{A, alley_services_utils:convert_arabic_numbers(M, Type)} || {A, M} <- Messages],
-    send(define_message_encoding, Req#send_req{messages = Messages2});
 
 send(define_message_encoding, Req) ->
     Messages = Req#send_req.messages,
