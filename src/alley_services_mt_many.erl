@@ -97,14 +97,15 @@ handle_call({Action, Payload, ReqId, GtwId}, From, St = #st{}) when
                 {[], GtwQueue}
         end,
     Props = [
-        {content_type, <<"SmsReqV1">>},
+        {content_type, <<"SmsReqV1z">>},
         {delivery_mode, 2},
         {priority, 1},
         {message_id, ReqId},
         {headers, Headers}
     ],
     Channel = St#st.chan,
-    ok = rmql:basic_publish(Channel, RoutingKey, Payload, Props),
+    PayloadZ = zlib:compress(Payload),
+    ok = rmql:basic_publish(Channel, RoutingKey, PayloadZ, Props),
     true = ets:insert(?MODULE, #unconfirmed{id = St#st.next_id, from = From}),
     {noreply, St#st{next_id = St#st.next_id + 1}};
 
