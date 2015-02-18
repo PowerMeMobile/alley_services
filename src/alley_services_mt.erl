@@ -206,10 +206,12 @@ send(route_to_gateways, Req) ->
             })
     end;
 
+%% TODO: move to clients
 send(define_message_encoding, Req) when
         Req#send_req.action =:= send_binary_sms ->
     send(define_smpp_params, Req);
 
+%% TODO: move to clients
 send(define_message_encoding, Req) ->
     {Encoding, Encoded} =
         case gsm0338:from_utf8(Req#send_req.message) of
@@ -221,6 +223,7 @@ send(define_message_encoding, Req) ->
         encoded_size = size(Encoded)
     });
 
+%% TODO: move to clients
 send(define_smpp_params, Req) when Req#send_req.action =:= send_service_sms ->
     Customer = Req#send_req.customer,
     ReceiptsAllowed = Customer#auth_customer_v1.receipts_allowed,
@@ -240,6 +243,7 @@ send(define_smpp_params, Req) when Req#send_req.action =:= send_service_sms ->
     ],
     send(check_billing, Req#send_req{smpp_params = Params});
 
+%% TODO: move to clients
 send(define_smpp_params, Req) when Req#send_req.action =:= send_binary_sms ->
     Customer = Req#send_req.customer,
     ReceiptsAllowed = Customer#auth_customer_v1.receipts_allowed,
@@ -260,6 +264,7 @@ send(define_smpp_params, Req) when Req#send_req.action =:= send_binary_sms ->
     ],
     send(check_billing, Req#send_req{smpp_params = Params});
 
+%% TODO: move to clients
 send(define_smpp_params, Req) ->
     Encoding = Req#send_req.encoding,
     Customer = Req#send_req.customer,

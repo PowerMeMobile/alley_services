@@ -206,6 +206,7 @@ send(route_to_gateways, Req) ->
             })
     end;
 
+%% TODO: move to clients
 send(define_message_encoding, Req) ->
     Messages = Req#send_req.messages,
     EncodeFun = fun(Msg) ->
@@ -228,6 +229,7 @@ send(define_message_encoding, Req) ->
         encoded_size = EncodedSize
     });
 
+%% TODO: move to clients
 send(define_smpp_params, Req) ->
     Customer = Req#send_req.customer,
     ReceiptsAllowed = Customer#auth_customer_v1.receipts_allowed,
