@@ -200,46 +200,15 @@ send(route_to_gateways, Req) ->
         {[], _} ->
             {ok, #send_result{result = no_dest_addrs}};
         {GtwId2Addrs, UnroutableToGateways} ->
-            send(process_msg_type, Req#send_req{
+            send(define_message_encoding, Req#send_req{
                 routable = GtwId2Addrs,
                 rejected = Req#send_req.rejected ++ UnroutableToGateways
             })
     end;
 
-%% FIXME: move this logic to clients
-send(process_msg_type, Req) when
-        Req#send_req.message =:= undefined andalso
-        Req#send_req.action =:= send_service_sms ->
-    Name = Req#send_req.s_name,
-    Url = Req#send_req.s_url,
-    case is_binary(Name) andalso is_binary(Url) of
-        true ->
-            Message = <<"<%SERVICEMESSAGE:", Name/binary, ";", Url/binary, "%>">>,
-            send(process_msg_type, Req#send_req{message = Message});
-        false ->
-            {ok, #send_result{result = bad_service_name_or_url}}
-    end;
-
-%% FIXME: move this logic to clients
-send(process_msg_type, Req) when
-        Req#send_req.message =:= undefined andalso
-        Req#send_req.binary_body =:= undefined andalso
+send(define_message_encoding, Req) when
         Req#send_req.action =:= send_binary_sms ->
-    {ok, #send_result{result = no_message_body}};
-
-%% FIXME: move this logic to clients
-send(process_msg_type, Req) when
-        Req#send_req.message =:= undefined andalso
-        Req#send_req.action =:= send_binary_sms ->
-    Message = ac_hexdump:hexdump_to_binary(Req#send_req.binary_body),
-    send(define_smpp_params, Req#send_req{
-        message = Message,
-        encoding = default,
-        encoded_size = size(Message)
-    });
-
-send(process_msg_type, Req) ->
-    send(define_message_encoding, Req);
+    send(define_smpp_params, Req);
 
 send(define_message_encoding, Req) ->
     {Encoding, Encoded} =

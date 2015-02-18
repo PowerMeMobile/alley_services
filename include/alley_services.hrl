@@ -27,12 +27,7 @@
     rejected     :: undefined | [#addr{}],
     req_dto_s    :: undefiend | [#just_sms_request_dto{}],
 
-    %% send_service_sms extention
-    s_name       :: undefined | binary(),
-    s_url        :: undefined | binary(),
-
     %% send_binary_sms extention
-    binary_body  :: undefined | binary(),
     data_coding  :: undefined | binary(),
     esm_class    :: undefined | binary(),
     protocol_id  :: undefined | binary(),
