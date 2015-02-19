@@ -201,31 +201,11 @@ send(route_to_gateways, Req) ->
         {[], _} ->
             {ok, #send_result{result = no_dest_addrs}};
         {GtwId2Addrs, UnroutableToGateways} ->
-            send(define_smpp_params, Req#send_req{
+            send(check_billing, Req#send_req{
                 routable = GtwId2Addrs,
                 rejected = Req#send_req.rejected ++ UnroutableToGateways
             })
     end;
-
-%% TODO: move to clients
-send(define_smpp_params, Req) ->
-    Customer = Req#send_req.customer,
-    ReceiptsAllowed = Customer#auth_customer_v1.receipts_allowed,
-    NoRetry = Customer#auth_customer_v1.no_retry,
-    Validity = alley_services_utils:fmt_validity(Customer#auth_customer_v1.default_validity),
-    Params = Req#send_req.smpp_params ++ [
-        {registered_delivery, ReceiptsAllowed},
-        {service_type, <<>>},
-        {no_retry, NoRetry},
-        {validity_period, Validity},
-        {priority_flag, 0},
-        {esm_class, 3},
-        {protocol_id, 0}
-    ],
-    ParamsFun = fun(E) -> flash(Req#send_req.flash, E) ++ Params end,
-    Encoding = Req#send_req.encoding,
-    Params2 = [{A, ParamsFun(E)} || {A, E} <- Encoding],
-    send(check_billing, Req#send_req{smpp_params = Params2});
 
 send(check_billing, Req) ->
     CustomerId = Req#send_req.customer_id,
@@ -353,13 +333,6 @@ setup_chan(St = #st{}) ->
             {ok, St#st{chan = Channel, chan_mon_ref = ChanMonRef}};
         unavailable -> unavailable
     end.
-
-flash(false, _) ->
-    [];
-flash(true, default) ->
-    [{data_coding, 240}];
-flash(true, ucs2) ->
-    [{data_coding, 248}].
 
 build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req) ->
     Encodings = dict:from_list(Req#send_req.encoding),

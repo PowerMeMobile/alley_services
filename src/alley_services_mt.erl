@@ -200,70 +200,11 @@ send(route_to_gateways, Req) ->
         {[], _} ->
             {ok, #send_result{result = no_dest_addrs}};
         {GtwId2Addrs, UnroutableToGateways} ->
-            send(define_smpp_params, Req#send_req{
+            send(check_billing, Req#send_req{
                 routable = GtwId2Addrs,
                 rejected = Req#send_req.rejected ++ UnroutableToGateways
             })
     end;
-
-%% TODO: move to clients
-send(define_smpp_params, Req) when Req#send_req.action =:= send_service_sms ->
-    Customer = Req#send_req.customer,
-    ReceiptsAllowed = Customer#auth_customer_v1.receipts_allowed,
-    NoRetry = Customer#auth_customer_v1.no_retry,
-    Validity = alley_services_utils:fmt_validity(Customer#auth_customer_v1.default_validity),
-    Params = Req#send_req.smpp_params ++ [
-        {<<"registered_delivery">>, ReceiptsAllowed},
-        {<<"service_type">>, <<>>},
-        {<<"no_retry">>, NoRetry},
-        {<<"validity_period">>, Validity},
-        {<<"priority_flag">>, 0},
-        {<<"esm_class">>, 64},
-        {<<"protocol_id">>, 0},
-        {<<"data_coding">>, 245},
-        {<<"source_port">>, 9200},
-        {<<"destination_port">>, 2948}
-    ],
-    send(check_billing, Req#send_req{smpp_params = Params});
-
-%% TODO: move to clients
-send(define_smpp_params, Req) when Req#send_req.action =:= send_binary_sms ->
-    Customer = Req#send_req.customer,
-    ReceiptsAllowed = Customer#auth_customer_v1.receipts_allowed,
-    NoRetry = Customer#auth_customer_v1.no_retry,
-    Validity = alley_services_utils:fmt_validity(Customer#auth_customer_v1.default_validity),
-    DC = maybe_binary_to_integer(Req#send_req.data_coding),
-    ESMClass = maybe_binary_to_integer(Req#send_req.esm_class),
-    ProtocolId = maybe_binary_to_integer(Req#send_req.protocol_id),
-    Params = Req#send_req.smpp_params ++ [
-        {<<"registered_delivery">>, ReceiptsAllowed},
-        {<<"service_type">>, <<>>},
-        {<<"no_retry">>, NoRetry},
-        {<<"validity_period">>, Validity},
-        {<<"priority_flag">>, 0},
-        {<<"data_coding">>, DC},
-        {<<"esm_class">>, ESMClass},
-        {<<"protocol_id">>, ProtocolId}
-    ],
-    send(check_billing, Req#send_req{smpp_params = Params});
-
-%% TODO: move to clients
-send(define_smpp_params, Req) ->
-    Encoding = Req#send_req.encoding,
-    Customer = Req#send_req.customer,
-    ReceiptsAllowed = Customer#auth_customer_v1.receipts_allowed,
-    NoRetry = Customer#auth_customer_v1.no_retry,
-    Validity = alley_services_utils:fmt_validity(Customer#auth_customer_v1.default_validity),
-    Params = Req#send_req.smpp_params ++ flash(Req#send_req.flash, Encoding) ++ [
-        {<<"registered_delivery">>, ReceiptsAllowed},
-        {<<"service_type">>, <<>>},
-        {<<"no_retry">>, NoRetry},
-        {<<"validity_period">>, Validity},
-        {<<"priority_flag">>, 0},
-        {<<"esm_class">>, 3},
-        {<<"protocol_id">>, 0}
-    ],
-    send(check_billing, Req#send_req{smpp_params = Params});
 
 send(check_billing, Req) ->
     CustomerId = Req#send_req.customer_id,
@@ -392,13 +333,6 @@ setup_chan(St = #st{}) ->
         unavailable -> unavailable
     end.
 
-flash(false, _) ->
-    [];
-flash(true, default) ->
-    [{<<"data_coding">>, 240}];
-flash(true, ucs2) ->
-    [{<<"data_coding">>, 248}].
-
 build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req) ->
     CustomerId = Req#send_req.customer_id,
     UserId = Req#send_req.user_id,
@@ -466,11 +400,3 @@ calc_sending_price(Req) ->
     Price = alley_services_coverage:calc_sending_price(
         AddrNetIdPrices, NumOfParts),
     Price.
-
-%% FIXME: move this logic to clients
-maybe_binary_to_integer(undefined) ->
-    0;
-maybe_binary_to_integer(<<>>) ->
-    0;
-maybe_binary_to_integer(Binary) ->
-    binary_to_integer(Binary).
