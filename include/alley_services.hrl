@@ -18,19 +18,13 @@
     message      :: undefined | binary(),
     messages     :: undefined | [binary()],
     def_date     :: undefined | binary(),
-    flash        :: undefined | boolean(),
     smpp_params = [] :: [{binary(), binary() | boolean() | integer()}],
-    encoding     :: undefined | default | ucs2,
-    encoded_size :: undefined | non_neg_integer(),
+    encoding     :: default | ucs2,
+    size         :: non_neg_integer(),
     coverage_tab :: undefined | ets:tid(),
     routable     :: undefined | [{provider_id() | gateway_id(), [#addr{}]}],
     rejected     :: undefined | [#addr{}],
     req_dto_s    :: undefiend | [#just_sms_request_dto{}],
-
-    %% send_binary_sms extention
-    data_coding  :: undefined | binary(),
-    esm_class    :: undefined | binary(),
-    protocol_id  :: undefined | binary(),
 
     credit_left  :: undefined | float()
 }).

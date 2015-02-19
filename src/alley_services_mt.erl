@@ -340,7 +340,7 @@ build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req) ->
     {DestAddrs, NetIds, Prices} = lists:unzip3(AddrNetIdPrices),
 
     Encoding = Req#send_req.encoding,
-    NumOfSymbols = Req#send_req.encoded_size,
+    NumOfSymbols = Req#send_req.size,
     NumOfDests = length(DestAddrs),
     NumOfParts = alley_services_utils:calc_parts_number(NumOfSymbols, Encoding),
     MessageIds = get_ids(CustomerId, UserId, NumOfDests, NumOfParts),
@@ -394,7 +394,7 @@ calc_sending_price(Req) ->
         [Addrs || {_GtwId, Addrs} <- GtwId2Addrs]),
 
     Encoding = Req#send_req.encoding,
-    NumOfSymbols = Req#send_req.encoded_size,
+    NumOfSymbols = Req#send_req.size,
     NumOfParts = alley_services_utils:calc_parts_number(
         NumOfSymbols, Encoding),
     Price = alley_services_coverage:calc_sending_price(

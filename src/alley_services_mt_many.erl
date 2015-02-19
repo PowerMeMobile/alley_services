@@ -336,7 +336,7 @@ setup_chan(St = #st{}) ->
 
 build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req) ->
     Encodings = dict:from_list(Req#send_req.encoding),
-    Sizes = dict:from_list(Req#send_req.encoded_size),
+    Sizes = dict:from_list(Req#send_req.size),
     Messages = dict:from_list(Req#send_req.messages),
     Params = dict:from_list(Req#send_req.smpp_params),
     build_sms_req_v1(ReqId, GatewayId, Req, AddrNetIdPrices, Messages, Encodings, Sizes, Params).
@@ -389,7 +389,7 @@ calc_sending_price(Req) ->
         [Addrs || {_GtwId, Addrs} <- GtwId2Addrs]),
 
     Encoding = Req#send_req.encoding,
-    Size = Req#send_req.encoded_size,
+    Size = Req#send_req.size,
     Price = sum(Encoding, Size, AddrNetIdPrices, 0),
     Price.
 
