@@ -8,7 +8,6 @@
 -type gateway_id()  :: binary().
 
 -record(send_req, {
-    action       :: atom(),
     customer     :: undefined | customer(),
     customer_id  :: undefined | binary(),
     user_id      :: undefined | binary(),
@@ -21,6 +20,7 @@
     smpp_params = [] :: [{binary(), binary() | boolean() | integer()}],
     encoding     :: default | ucs2,
     size         :: non_neg_integer(),
+
     coverage_tab :: undefined | ets:tid(),
     routable     :: undefined | [{provider_id() | gateway_id(), [#addr{}]}],
     rejected     :: undefined | [#addr{}],

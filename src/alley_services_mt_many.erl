@@ -55,7 +55,7 @@ start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 -spec send(#send_req{}) -> {ok, [{K::atom(), V::any()}]}.
-send(Req) when Req#send_req.action =:= send_sms_many ->
+send(Req) ->
     send(fill_coverage_tab, Req).
 
 -spec publish({publish_action(), payload(), req_id(), gateway_id()}) -> ok.
