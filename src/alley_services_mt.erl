@@ -200,28 +200,11 @@ send(route_to_gateways, Req) ->
         {[], _} ->
             {ok, #send_result{result = no_dest_addrs}};
         {GtwId2Addrs, UnroutableToGateways} ->
-            send(define_message_encoding, Req#send_req{
+            send(define_smpp_params, Req#send_req{
                 routable = GtwId2Addrs,
                 rejected = Req#send_req.rejected ++ UnroutableToGateways
             })
     end;
-
-%% TODO: move to clients
-send(define_message_encoding, Req) when
-        Req#send_req.action =:= send_binary_sms ->
-    send(define_smpp_params, Req);
-
-%% TODO: move to clients
-send(define_message_encoding, Req) ->
-    {Encoding, Encoded} =
-        case gsm0338:from_utf8(Req#send_req.message) of
-            {valid, Binary} -> {default, Binary};
-            {invalid, Binary} -> {ucs2, Binary}
-        end,
-    send(define_smpp_params, Req#send_req{
-        encoding = Encoding,
-        encoded_size = size(Encoded)
-    });
 
 %% TODO: move to clients
 send(define_smpp_params, Req) when Req#send_req.action =:= send_service_sms ->

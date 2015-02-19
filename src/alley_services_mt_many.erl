@@ -201,34 +201,11 @@ send(route_to_gateways, Req) ->
         {[], _} ->
             {ok, #send_result{result = no_dest_addrs}};
         {GtwId2Addrs, UnroutableToGateways} ->
-            send(define_message_encoding, Req#send_req{
+            send(define_smpp_params, Req#send_req{
                 routable = GtwId2Addrs,
                 rejected = Req#send_req.rejected ++ UnroutableToGateways
             })
     end;
-
-%% TODO: move to clients
-send(define_message_encoding, Req) ->
-    Messages = Req#send_req.messages,
-    EncodeFun = fun(Msg) ->
-        case gsm0338:from_utf8(Msg) of
-            {valid, Binary} -> {default, Binary};
-            {invalid, Binary} -> {ucs2, Binary}
-        end
-    end,
-    {Encoding, EncodedSize} =
-        lists:foldl(
-            fun({A, M}, {EingAcc, EedAcc}) ->
-                {Eing, Eed} = EncodeFun(M),
-                {[{A, Eing} | EingAcc], [{A, size(Eed)} | EedAcc]}
-            end,
-            {[], []},
-            Messages
-        ),
-    send(define_smpp_params, Req#send_req{
-        encoding = Encoding,
-        encoded_size = EncodedSize
-    });
 
 %% TODO: move to clients
 send(define_smpp_params, Req) ->

@@ -4,7 +4,8 @@
     addr_to_dto/1,
     calc_parts_number/2,
     convert_arabic_numbers/2,
-    fmt_validity/1
+    fmt_validity/1,
+    encoding_size/1
 ]).
 
 %-define(TEST, 1).
@@ -121,6 +122,13 @@ fmt_validity(SecondsTotal) ->
         lists:flatten(io_lib:format("~2..0w~2..0w~2..0w~2..0w~2..0w~2..0w000R",
                   [Years, Months, Days, Hours, Minutes, Seconds])),
     list_to_binary(StringValidity).
+
+-spec encoding_size(binary()) -> {default | ucs2, non_neg_integer()}.
+encoding_size(Msg) ->
+    case gsm0338:from_utf8(Msg) of
+        {valid, Binary} -> {default, size(Binary)};
+        {invalid, Binary} -> {ucs2, size(Binary)}
+    end.
 
 %% ===================================================================
 %% Begin Tests
