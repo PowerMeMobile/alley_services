@@ -334,46 +334,79 @@ setup_chan(St = #st{}) ->
         unavailable -> unavailable
     end.
 
-build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req) ->
-    Encodings = dict:from_list(Req#send_req.encoding),
-    Sizes = dict:from_list(Req#send_req.size),
-    Messages = dict:from_list(Req#send_req.messages),
-    Params = dict:from_list(Req#send_req.smpp_params),
-    build_sms_req_v1(ReqId, GatewayId, Req, AddrNetIdPrices, Messages, Encodings, Sizes, Params).
-
-build_sms_req_v1(
-        ReqId, GatewayId, Req,
-        AddrNetIdPrices, Messages, Encodings, Sizes, Params) ->
+build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req)
+        when Req#send_req.req_type =:= one_to_many ->
+    CustomerId = Req#send_req.customer_id,
+    UserId = Req#send_req.user_id,
 
     {DestAddrs, NetIds, Prices} = lists:unzip3(AddrNetIdPrices),
 
-    CustomerId = Req#send_req.customer_id,
-    UserId = Req#send_req.user_id,
-    Encodings2 = [dict:fetch(A, Encodings) || A <- DestAddrs],
-    MsgIdFun = fun(A) ->
-        Size = dict:fetch(A, Sizes),
-        Encoding = dict:fetch(A, Encodings),
-        NumOfSymbols = Size,
-        NumOfParts = alley_services_utils:calc_parts_number(NumOfSymbols, Encoding),
-        get_id(CustomerId, UserId, NumOfParts)
-    end,
-    InMsgIds = [MsgIdFun(A) || A <- DestAddrs],
-    Params2 = [dict:fetch(A, Params) || A <- DestAddrs],
-    Messages2 = [dict:fetch(A, Messages) || A <- DestAddrs],
+    Encoding = Req#send_req.encoding,
+    NumOfSymbols = Req#send_req.size,
+    NumOfDests = length(DestAddrs),
+    NumOfParts = alley_services_utils:calc_parts_number(NumOfSymbols, Encoding),
+    MsgIds = get_ids(CustomerId, UserId, NumOfDests, NumOfParts),
+    Params = Req#send_req.params,
+
+    Dup = length(DestAddrs),
 
     #sms_req_v1{
         req_id = ReqId,
         gateway_id = GatewayId,
         customer_id = CustomerId,
         user_id = UserId,
-        interface = Req#send_req.client_type,
+        interface = Req#send_req.interface,
         type = regular,
         src_addr = Req#send_req.originator,
         dst_addrs = DestAddrs,
-        in_msg_ids = InMsgIds,
-        encodings = Encodings2,
-        messages = Messages2,
-        params_s = Params2,
+        msg_ids = MsgIds,
+        message = Req#send_req.message,
+        messages = lists:duplicate(Dup, Req#send_req.message),
+        encodings = lists:duplicate(Dup, Encoding),
+        params_s = lists:duplicate(Dup, Params),
+        net_ids = NetIds,
+        prices = Prices
+    };
+build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req)
+        when Req#send_req.req_type =:= many_to_many ->
+    EncMap = dict:from_list(Req#send_req.encoding_map),
+    SizeMap = dict:from_list(Req#send_req.size_map),
+    MsgMap = dict:from_list(Req#send_req.message_map),
+    ParamsMap = dict:from_list(Req#send_req.params_map),
+    build_sms_req_v1(ReqId, GatewayId, Req, AddrNetIdPrices, MsgMap, EncMap, SizeMap, ParamsMap).
+
+build_sms_req_v1(ReqId, GatewayId, Req, AddrNetIdPrices,
+        MsgDict, EncDict, SizeDict, ParamsDict) ->
+    CustomerId = Req#send_req.customer_id,
+    UserId = Req#send_req.user_id,
+
+    {DestAddrs, NetIds, Prices} = lists:unzip3(AddrNetIdPrices),
+
+    Encs = [dict:fetch(A, EncDict) || A <- DestAddrs],
+    MsgIdFun = fun(A) ->
+        Size = dict:fetch(A, SizeDict),
+        Enc = dict:fetch(A, EncDict),
+        NumOfParts = alley_services_utils:calc_parts_number(Size, Enc),
+        get_id(CustomerId, UserId, NumOfParts)
+    end,
+    MsgIds = [MsgIdFun(A) || A <- DestAddrs],
+    Params = [dict:fetch(A, ParamsDict) || A <- DestAddrs],
+    Msgs = [dict:fetch(A, MsgDict) || A <- DestAddrs],
+
+    #sms_req_v1{
+        req_id = ReqId,
+        gateway_id = GatewayId,
+        customer_id = CustomerId,
+        user_id = UserId,
+        interface = Req#send_req.interface,
+        type = regular,
+        src_addr = Req#send_req.originator,
+        dst_addrs = DestAddrs,
+        msg_ids = MsgIds,
+        message = Req#send_req.message,
+        messages = Msgs,
+        encodings = Encs,
+        params_s = Params,
         net_ids = NetIds,
         prices = Prices
     }.
@@ -383,21 +416,44 @@ get_id(CustomerId, UserId, Parts) ->
     Ids2 = [integer_to_list(Id) || Id <- Ids],
     list_to_binary(string:join(Ids2, ":")).
 
-calc_sending_price(Req) ->
+get_ids(CustomerId, UserId, NumberOfDests, Parts) ->
+    {ok, Ids} = alley_services_db:next_id(CustomerId, UserId, NumberOfDests * Parts),
+    {DTOIds, []} =
+        lists:foldl(
+          fun(Id, {Acc, Group}) when (length(Group) + 1) =:= Parts ->
+                  StrId = integer_to_list(Id),
+                  GroupIds = list_to_binary(string:join(lists:reverse([StrId | Group]), ":")),
+                  {[GroupIds | Acc], []};
+             (Id, {Acc, Group}) ->
+                  {Acc, [integer_to_list(Id) | Group]}
+          end, {[], []}, Ids),
+    DTOIds.
+
+calc_sending_price(Req) when Req#send_req.req_type =:= one_to_many ->
     GtwId2Addrs = Req#send_req.routable,
     AddrNetIdPrices = lists:flatten(
         [Addrs || {_GtwId, Addrs} <- GtwId2Addrs]),
 
-    Encoding = Req#send_req.encoding,
+    Enc = Req#send_req.encoding,
     Size = Req#send_req.size,
-    Price = sum(Encoding, Size, AddrNetIdPrices, 0),
+    NumOfParts = alley_services_utils:calc_parts_number(Size, Enc),
+    Price = alley_services_coverage:calc_sending_price(
+        AddrNetIdPrices, NumOfParts),
+    Price;
+calc_sending_price(Req) when Req#send_req.req_type =:= many_to_many ->
+    GtwId2Addrs = Req#send_req.routable,
+    AddrNetIdPrices = lists:flatten(
+        [Addrs || {_GtwId, Addrs} <- GtwId2Addrs]),
+
+    EncMap = Req#send_req.encoding_map,
+    SizeMap = Req#send_req.size_map,
+    Price = sum(EncMap, SizeMap, AddrNetIdPrices, 0),
     Price.
 
 sum([{A, E} | Encs], [{A, S} | Sizes], Addr2Prices, Acc) ->
-    Encoding = E,
-    NumOfSymbols = S,
-    NumOfParts = alley_services_utils:calc_parts_number(
-        NumOfSymbols, Encoding),
+    Enc = E,
+    Size = S,
+    NumOfParts = alley_services_utils:calc_parts_number(Size, Enc),
     {A, _NetId, OneMsgPrice} = lists:keyfind(A, 1, Addr2Prices),
     sum(Encs, Sizes, Addr2Prices, OneMsgPrice * NumOfParts + Acc);
 sum([], [], _Addr2Prices, Acc) ->

@@ -345,14 +345,14 @@ build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req) ->
     NumOfParts = alley_services_utils:calc_parts_number(NumOfSymbols, Encoding),
     MessageIds = get_ids(CustomerId, UserId, NumOfDests, NumOfParts),
 
-    Params = wrap_params(Req#send_req.smpp_params),
+    Params = wrap_params(Req#send_req.params),
 
     #just_sms_request_dto{
         id = ReqId,
         gateway_id = GatewayId,
         customer_id = CustomerId,
         user_id = UserId,
-        client_type = Req#send_req.client_type,
+        client_type = Req#send_req.interface,
         type = regular,
         message = Req#send_req.message,
         encoding = Encoding,
@@ -394,9 +394,9 @@ calc_sending_price(Req) ->
         [Addrs || {_GtwId, Addrs} <- GtwId2Addrs]),
 
     Encoding = Req#send_req.encoding,
-    NumOfSymbols = Req#send_req.size,
+    Size = Req#send_req.size,
     NumOfParts = alley_services_utils:calc_parts_number(
-        NumOfSymbols, Encoding),
+        Size, Encoding),
     Price = alley_services_coverage:calc_sending_price(
         AddrNetIdPrices, NumOfParts),
     Price.

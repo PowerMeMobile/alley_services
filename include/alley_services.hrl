@@ -8,23 +8,35 @@
 -type gateway_id()  :: binary().
 
 -record(send_req, {
-    customer     :: undefined | customer(),
-    customer_id  :: undefined | binary(),
-    user_id      :: undefined | binary(),
-    client_type  :: atom(),
-    originator   :: undefined | binary(),
+    customer     :: customer(),
+    customer_id  :: binary(),
+    user_id      :: binary(),
+    interface    :: atom(),
+    originator   :: #addr{},
     recipients   :: [#addr{}],
-    message      :: undefined | binary(),
-    messages     :: undefined | [binary()],
+
+    req_type     :: one_to_many | many_to_many,
+
+    %% batch message or custom tags message
+    message      :: binary(),
+
+    %% one_to_many
+    encoding     :: undefined | default | ucs2,
+    size         :: undefined | non_neg_integer(),
+    params       :: undefined | [{binary(), binary() | boolean() | integer()}],
+
+    %% many_to_many (custom tags)
+    message_map  :: undefined | [{#addr{}, binary()}],
+    encoding_map :: undefined | [{#addr{}, default | ucs2}],
+    size_map     :: undefined | [{#addr{}, non_neg_integer()}],
+    params_map   :: undefined | [{#addr{}, [{binary(), binary() | boolean() | integer()}]}],
+
     def_date     :: undefined | binary(),
-    smpp_params = [] :: [{binary(), binary() | boolean() | integer()}],
-    encoding     :: default | ucs2,
-    size         :: non_neg_integer(),
 
     coverage_tab :: undefined | ets:tid(),
     routable     :: undefined | [{provider_id() | gateway_id(), [#addr{}]}],
     rejected     :: undefined | [#addr{}],
-    req_dto_s    :: undefiend | [#just_sms_request_dto{}],
+    req_dto_s    :: undefiend | [#sms_req_v1{}],
 
     credit_left  :: undefined | float()
 }).
