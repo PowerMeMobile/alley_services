@@ -70,10 +70,10 @@ init([]) ->
     ?MODULE = ets:new(?MODULE, [named_table, ordered_set, {keypos, 2}]),
     case setup_chan(#st{}) of
         {ok, St} ->
-            ?log_info("MT: started", []),
+            ?log_info("MT Many: started", []),
             {ok, St};
         unavailable ->
-            ?log_error("MT: initializing failed (amqp_unavailable). shutdown", []),
+            ?log_error("MT Many: initializing failed (amqp_unavailable). shutdown", []),
             {stop, amqp_unavailable}
     end.
 
@@ -97,14 +97,15 @@ handle_call({Action, Payload, ReqId, GtwId}, From, St = #st{}) when
                 {[], GtwQueue}
         end,
     Props = [
-        {content_type, <<"SmsRequest2">>},
+        {content_type, <<"SmsReqV1z">>},
         {delivery_mode, 2},
         {priority, 1},
         {message_id, ReqId},
         {headers, Headers}
     ],
     Channel = St#st.chan,
-    ok = rmql:basic_publish(Channel, RoutingKey, Payload, Props),
+    PayloadZ = zlib:compress(Payload),
+    ok = rmql:basic_publish(Channel, RoutingKey, PayloadZ, Props),
     true = ets:insert(?MODULE, #unconfirmed{id = St#st.next_id, from = From}),
     {noreply, St#st{next_id = St#st.next_id + 1}};
 
@@ -115,7 +116,7 @@ handle_cast(Req, St) ->
     {stop, {unexpected_cast, Req}, St}.
 
 handle_info(#'DOWN'{ref = Ref, info = Info}, St = #st{chan_mon_ref = Ref}) ->
-    ?log_error("MT: amqp channel down (~p)", [Info]),
+    ?log_error("MT Many: amqp channel down (~p)", [Info]),
     {stop, amqp_channel_down, St};
 
 handle_info(Confirm, St) when is_record(Confirm, 'basic.ack');
@@ -127,7 +128,7 @@ handle_info(_Info, St) ->
     {stop, unexpected_info, St}.
 
 terminate(Reason, _St) ->
-    ?log_info("MT: terminated (~p)", [Reason]),
+    ?log_info("MT Many: terminated (~p)", [Reason]),
     ok.
 
 code_change(_OldVsn, St, _Extra) ->
@@ -230,10 +231,10 @@ send(check_billing, Req) ->
 send(build_req_dto_s, Req) ->
     ReqId = uuid:unparse(uuid:generate_time()),
     Destinations = Req#send_req.routable,
-    ReqDTOs = [
+    ReqDTOs = lists:flatten([
         build_req_dto(ReqId, GtwId, AddrNetIdPrices, Req) ||
         {GtwId, AddrNetIdPrices} <- Destinations
-    ],
+    ]),
     send(publish_dto_s, Req#send_req{req_dto_s = ReqDTOs});
 
 send(publish_dto_s, Req) ->
@@ -244,8 +245,8 @@ send(publish_dto_s, Req) ->
                 fun(ReqDTO) ->
                     ?log_info("mt_srv: defDate -> ~p, timestamp -> ~p", [DefDate, Timestamp]),
                     {ok, Payload} = adto:encode(ReqDTO),
-                    ReqId = ReqDTO#just_sms_request_dto.id,
-                    GtwId = ReqDTO#just_sms_request_dto.gateway_id,
+                    ReqId = ReqDTO#sms_req_v1.req_id,
+                    GtwId = ReqDTO#sms_req_v1.gateway_id,
                     ok = alley_services_defer:defer({ReqId, GtwId}, Timestamp,
                         {publish_just, Payload, ReqId, GtwId}),
                     ok = publish({publish_kelly, Payload, ReqId, GtwId})
@@ -253,14 +254,14 @@ send(publish_dto_s, Req) ->
             false ->
                 fun(ReqDTO) ->
                     {ok, Payload} = adto:encode(ReqDTO),
-                    ReqId = ReqDTO#just_sms_request_dto.id,
-                    GtwId = ReqDTO#just_sms_request_dto.gateway_id,
+                    ReqId = ReqDTO#sms_req_v1.req_id,
+                    GtwId = ReqDTO#sms_req_v1.gateway_id,
                     ok = publish({publish, Payload, ReqId, GtwId})
                 end
         end,
 
     ReqDTOs = Req#send_req.req_dto_s,
-    ReqId = (hd(ReqDTOs))#just_sms_request_dto.id,
+    ReqId = (hd(ReqDTOs))#sms_req_v1.req_id,
 
     lists:foreach(
         fun(ReqDTO) ->
@@ -333,7 +334,8 @@ setup_chan(St = #st{}) ->
         unavailable -> unavailable
     end.
 
-build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req) ->
+build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req)
+        when Req#send_req.req_type =:= one_to_many ->
     CustomerId = Req#send_req.customer_id,
     UserId = Req#send_req.user_id,
 
@@ -343,26 +345,76 @@ build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req) ->
     NumOfSymbols = Req#send_req.size,
     NumOfDests = length(DestAddrs),
     NumOfParts = alley_services_utils:calc_parts_number(NumOfSymbols, Encoding),
-    MessageIds = get_ids(CustomerId, UserId, NumOfDests, NumOfParts),
+    MsgIds = get_ids(CustomerId, UserId, NumOfDests, NumOfParts),
+    Params = Req#send_req.params,
 
-    Params = wrap_params(Req#send_req.params),
+    Dup = length(DestAddrs),
 
-    #just_sms_request_dto{
-        id = ReqId,
+    #sms_req_v1{
+        req_id = ReqId,
         gateway_id = GatewayId,
         customer_id = CustomerId,
         user_id = UserId,
-        client_type = Req#send_req.interface,
+        interface = Req#send_req.interface,
         type = regular,
+        src_addr = Req#send_req.originator,
+        dst_addrs = DestAddrs,
+        msg_ids = MsgIds,
         message = Req#send_req.message,
-        encoding = Encoding,
-        params = Params,
-        source_addr = Req#send_req.originator,
-        dest_addrs = {regular, DestAddrs},
-        message_ids = MessageIds,
-        network_ids = NetIds,
+        messages = lists:duplicate(Dup, Req#send_req.message),
+        encodings = lists:duplicate(Dup, Encoding),
+        params_s = lists:duplicate(Dup, Params),
+        net_ids = NetIds,
+        prices = Prices
+    };
+build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req)
+        when Req#send_req.req_type =:= many_to_many ->
+    EncMap = dict:from_list(Req#send_req.encoding_map),
+    SizeMap = dict:from_list(Req#send_req.size_map),
+    MsgMap = dict:from_list(Req#send_req.message_map),
+    ParamsMap = dict:from_list(Req#send_req.params_map),
+    build_sms_req_v1(ReqId, GatewayId, Req, AddrNetIdPrices, MsgMap, EncMap, SizeMap, ParamsMap).
+
+build_sms_req_v1(ReqId, GatewayId, Req, AddrNetIdPrices,
+        MsgDict, EncDict, SizeDict, ParamsDict) ->
+    CustomerId = Req#send_req.customer_id,
+    UserId = Req#send_req.user_id,
+
+    {DestAddrs, NetIds, Prices} = lists:unzip3(AddrNetIdPrices),
+
+    Encs = [dict:fetch(A, EncDict) || A <- DestAddrs],
+    MsgIdFun = fun(A) ->
+        Size = dict:fetch(A, SizeDict),
+        Enc = dict:fetch(A, EncDict),
+        NumOfParts = alley_services_utils:calc_parts_number(Size, Enc),
+        get_id(CustomerId, UserId, NumOfParts)
+    end,
+    MsgIds = [MsgIdFun(A) || A <- DestAddrs],
+    Params = [dict:fetch(A, ParamsDict) || A <- DestAddrs],
+    Msgs = [dict:fetch(A, MsgDict) || A <- DestAddrs],
+
+    #sms_req_v1{
+        req_id = ReqId,
+        gateway_id = GatewayId,
+        customer_id = CustomerId,
+        user_id = UserId,
+        interface = Req#send_req.interface,
+        type = regular,
+        src_addr = Req#send_req.originator,
+        dst_addrs = DestAddrs,
+        msg_ids = MsgIds,
+        message = Req#send_req.message,
+        messages = Msgs,
+        encodings = Encs,
+        params_s = Params,
+        net_ids = NetIds,
         prices = Prices
     }.
+
+get_id(CustomerId, UserId, Parts) ->
+    {ok, Ids} = alley_services_db:next_id(CustomerId, UserId, Parts),
+    Ids2 = [integer_to_list(Id) || Id <- Ids],
+    list_to_binary(string:join(Ids2, ":")).
 
 get_ids(CustomerId, UserId, NumberOfDests, Parts) ->
     {ok, Ids} = alley_services_db:next_id(CustomerId, UserId, NumberOfDests * Parts),
@@ -377,26 +429,32 @@ get_ids(CustomerId, UserId, NumberOfDests, Parts) ->
           end, {[], []}, Ids),
     DTOIds.
 
-wrap_params(Params) ->
-    Tag = fun
-        (Str) when is_binary(Str) ->
-            {string, Str};
-        (Bool) when is_boolean(Bool) ->
-            {boolean, Bool};
-        (Int) when is_integer(Int) ->
-            {integer, Int}
-    end,
-    [#just_sms_request_param_dto{name = N, value = Tag(V)} || {N, V} <- Params].
-
-calc_sending_price(Req) ->
+calc_sending_price(Req) when Req#send_req.req_type =:= one_to_many ->
     GtwId2Addrs = Req#send_req.routable,
     AddrNetIdPrices = lists:flatten(
         [Addrs || {_GtwId, Addrs} <- GtwId2Addrs]),
 
-    Encoding = Req#send_req.encoding,
+    Enc = Req#send_req.encoding,
     Size = Req#send_req.size,
-    NumOfParts = alley_services_utils:calc_parts_number(
-        Size, Encoding),
+    NumOfParts = alley_services_utils:calc_parts_number(Size, Enc),
     Price = alley_services_coverage:calc_sending_price(
         AddrNetIdPrices, NumOfParts),
+    Price;
+calc_sending_price(Req) when Req#send_req.req_type =:= many_to_many ->
+    GtwId2Addrs = Req#send_req.routable,
+    AddrNetIdPrices = lists:flatten(
+        [Addrs || {_GtwId, Addrs} <- GtwId2Addrs]),
+
+    EncMap = Req#send_req.encoding_map,
+    SizeMap = Req#send_req.size_map,
+    Price = sum(EncMap, SizeMap, AddrNetIdPrices, 0),
     Price.
+
+sum([{A, E} | Encs], [{A, S} | Sizes], Addr2Prices, Acc) ->
+    Enc = E,
+    Size = S,
+    NumOfParts = alley_services_utils:calc_parts_number(Size, Enc),
+    {A, _NetId, OneMsgPrice} = lists:keyfind(A, 1, Addr2Prices),
+    sum(Encs, Sizes, Addr2Prices, OneMsgPrice * NumOfParts + Acc);
+sum([], [], _Addr2Prices, Acc) ->
+    Acc.
