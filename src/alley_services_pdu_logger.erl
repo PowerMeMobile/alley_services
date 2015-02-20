@@ -90,12 +90,7 @@ get_loglevel(CustomerId, UserId) ->
             get_loglevel(Pid)
     end.
 
--spec log(#just_sms_request_dto{} | #sms_req_v1{}) -> ok.
-log(SmsReq = #just_sms_request_dto{
-    customer_id = CustomerId,
-    user_id = UserId
-}) ->
-    do_log(CustomerId, UserId, SmsReq);
+-spec log(#sms_req_v1{}) -> ok.
 log(SmsReq = #sms_req_v1{
     customer_id = CustomerId,
     user_id = UserId
@@ -274,17 +269,7 @@ fmt_time({H, M, S}) ->
 %% Format data
 %% ===================================================================
 
--spec fmt_data(#just_sms_request_dto{} | #sms_req_v1{}) -> [{term(), term()}].
-fmt_data(SmsReq = #just_sms_request_dto{}) ->
-    Fields = record_info(fields, just_sms_request_dto),
-    Fun =
-        fun(#just_sms_request_param_dto{name = Key, value = {_Type, Value}}) ->
-            {Key, Value}
-        end,
-    Params = [Fun(P) || P <- SmsReq#just_sms_request_dto.params],
-    [_ | Values] =
-        tuple_to_list(SmsReq#just_sms_request_dto{params = Params}),
-    lists:zip(Fields, Values);
+-spec fmt_data(#sms_req_v1{}) -> [{term(), term()}].
 fmt_data(SmsReq = #sms_req_v1{}) ->
     Fields = record_info(fields, sms_req_v1),
     [_ | Values] = tuple_to_list(SmsReq),
