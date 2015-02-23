@@ -56,7 +56,7 @@ start_link() ->
 
 -spec send(#send_req{}) -> {ok, [{K::atom(), V::any()}]}.
 send(Req) ->
-    send(fill_coverage_tab, Req).
+    send(check_interface, Req).
 
 -spec publish({publish_action(), payload(), req_id(), gateway_id()}) -> ok.
 publish(Req) ->
@@ -137,6 +137,14 @@ code_change(_OldVsn, St, _Extra) ->
 %% ===================================================================
 %% Send steps
 %% ===================================================================
+
+send(check_interface, Req) ->
+    case Req#send_req.interface of
+        undefined ->
+            {ok, #send_result{result = no_interface}};
+        _ ->
+            send(fill_coverage_tab, Req)
+    end;
 
 send(fill_coverage_tab, Req) ->
     Customer = Req#send_req.customer,
