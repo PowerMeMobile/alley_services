@@ -377,11 +377,54 @@ build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req)
     };
 build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req)
         when Req#send_req.req_type =:= many_to_many ->
-    EncMap = dict:from_list(Req#send_req.encoding_map),
-    SizeMap = dict:from_list(Req#send_req.size_map),
-    MsgMap = dict:from_list(Req#send_req.message_map),
-    ParamsMap = dict:from_list(Req#send_req.params_map),
-    build_sms_req_v1(ReqId, GatewayId, Req, AddrNetIdPrices, MsgMap, EncMap, SizeMap, ParamsMap).
+    EncDict = dict_from_list(Req#send_req.encoding_map),
+    SizeDict = dict_from_list(Req#send_req.size_map),
+    MsgDict = dict_from_list(Req#send_req.message_map),
+    ParamsDict = dict_from_list(Req#send_req.params_map),
+    build_sms_req_v1(ReqId, GatewayId, Req, AddrNetIdPrices, MsgDict, EncDict, SizeDict, ParamsDict).
+
+dict_from_list(KVs) ->
+    dict_from_list(KVs, dict:new()).
+
+dict_from_list([], Dict) ->
+    Dict;
+dict_from_list([{K, V}| KVs], Dict) ->
+    InsertFun = fun(Acc) -> [V | Acc] end,
+    dict_from_list(KVs, dict:update(K, InsertFun, [V], Dict)).
+
+fetch_one(Addr, MsgIdFun, MsgDict, EncDict, SizeDict, ParamsDict) ->
+    case dict:fetch(Addr, MsgDict) of
+        [Msg] ->
+            [Enc] = dict:fetch(Addr, EncDict),
+            [Size] = dict:fetch(Addr, SizeDict),
+            [Params] = dict:fetch(Addr, ParamsDict),
+            MsgId = MsgIdFun(Enc, Size),
+            {MsgId, Msg, Enc, Params,
+             MsgDict, EncDict, SizeDict, ParamsDict};
+        [Msg|_] ->
+            [Enc|_] = dict:fetch(Addr, EncDict),
+            [Size|_] = dict:fetch(Addr, SizeDict),
+            [Params|_] = dict:fetch(Addr, ParamsDict),
+            MsgId = MsgIdFun(Enc, Size),
+            RemoveFun = fun([_|Acc]) -> Acc end,
+            {MsgId, Msg, Enc, Params,
+             dict:update(Addr, RemoveFun, MsgDict),
+             dict:update(Addr, RemoveFun, EncDict),
+             dict:update(Addr, RemoveFun, SizeDict),
+             dict:update(Addr, RemoveFun, ParamsDict)}
+    end.
+
+fetch_all(Addrs, MsgIdFun, MsgDict, EncDict, SizeDict, ParamsDict) ->
+    fetch_all(Addrs, MsgIdFun, MsgDict, EncDict, SizeDict, ParamsDict, []).
+
+fetch_all([], _MsgIdFun, _MsgDict, _EncDict, _SizeDict, _ParamsDict, Acc) ->
+    lists:reverse(Acc);
+fetch_all([Addr|Addrs], MsgIdFun, MsgDict, EncDict, SizeDict, ParamsDict, Acc) ->
+    {MsgId, Msg, Enc, Params,
+     MsgDict2, EncDict2, SizeDict2, ParamsDict2} =
+        fetch_one(Addr, MsgIdFun, MsgDict, EncDict, SizeDict, ParamsDict),
+    Acc2 = [{MsgId, Msg, Enc, Params} | Acc],
+    fetch_all(Addrs, MsgIdFun, MsgDict2, EncDict2, SizeDict2, ParamsDict2, Acc2).
 
 build_sms_req_v1(ReqId, GatewayId, Req, AddrNetIdPrices,
         MsgDict, EncDict, SizeDict, ParamsDict) ->
@@ -390,16 +433,12 @@ build_sms_req_v1(ReqId, GatewayId, Req, AddrNetIdPrices,
 
     {DestAddrs, NetIds, Prices} = lists:unzip3(AddrNetIdPrices),
 
-    Encs = [dict:fetch(A, EncDict) || A <- DestAddrs],
-    MsgIdFun = fun(A) ->
-        Size = dict:fetch(A, SizeDict),
-        Enc = dict:fetch(A, EncDict),
+    MsgIdFun = fun(Enc, Size) ->
         NumOfParts = alley_services_utils:calc_parts_number(Size, Enc),
         get_id(CustomerId, UserId, NumOfParts)
     end,
-    MsgIds = [MsgIdFun(A) || A <- DestAddrs],
-    Params = [dict:fetch(A, ParamsDict) || A <- DestAddrs],
-    Msgs = [dict:fetch(A, MsgDict) || A <- DestAddrs],
+    {MsgIds, Msgs, Encs, Params} = ac_lists:unzip4(
+        fetch_all(DestAddrs, MsgIdFun, MsgDict, EncDict, SizeDict, ParamsDict)),
 
     #sms_req_v1{
         req_id = ReqId,
