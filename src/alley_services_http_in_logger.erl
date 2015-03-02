@@ -85,7 +85,7 @@ log(RespCode, RespHeaders, RespBody, Req, ReqBody) ->
         req = Req,
         req_body = ReqBody
     },
-    gen_server:call(?MODULE, LogTask, 30000).
+    gen_server:cast(?MODULE, LogTask).
 
 %% ===================================================================
 %% gen_server callbacks
@@ -99,12 +99,6 @@ init([]) ->
     ?log_info("http_in_logger: started", []),
     {ok, #st{log_level = none, max_size = LogSize}}.
 
-%% logging callbacks
-handle_call(#log{}, _From, #st{log_level = none} = St) ->
-    {reply, ok, St};
-handle_call(LogData = #log{}, _From, St) ->
-    St1 = write_log_msg(fmt_data(LogData, St#st.log_level), ensure_actual_date(St)),
-    {reply, ok, St1};
 handle_call(get_loglevel, _From, #st{log_level = LogLevel} = St) ->
     {reply, {ok, LogLevel}, St};
 handle_call(_Request, _From, State) ->
@@ -137,6 +131,13 @@ handle_cast({set_loglevel, LogLevel}, #st{log_level = none} = St) ->
 %%% change loglevel
 handle_cast({set_loglevel, LogLevel}, St) ->
     {noreply, St#st{log_level = LogLevel}};
+
+%% logging callbacks
+handle_cast(#log{}, #st{log_level = none} = St) ->
+    {noreply, St};
+handle_cast(LogData = #log{}, St) ->
+    St1 = write_log_msg(fmt_data(LogData, St#st.log_level), ensure_actual_date(St)),
+    {noreply, St1};
 
 handle_cast(_Msg, State) ->
     {stop, unexpected_cast, State}.
