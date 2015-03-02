@@ -15,7 +15,7 @@
     originator   :: #addr{},
     recipients   :: [#addr{}],
 
-    req_type     :: one_to_many | many_to_many,
+    req_type     :: one_to_many | one_to_one,
 
     %% batch message or custom tags message
     message      :: binary(),
@@ -25,7 +25,7 @@
     size         :: undefined | non_neg_integer(),
     params       :: undefined | [{binary(), binary() | boolean() | integer()}],
 
-    %% many_to_many (custom tags)
+    %% one_to_one (custom tags)
     message_map  :: undefined | [{#addr{}, binary()}],
     encoding_map :: undefined | [{#addr{}, default | ucs2}],
     size_map     :: undefined | [{#addr{}, non_neg_integer()}],

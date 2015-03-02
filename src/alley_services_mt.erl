@@ -376,7 +376,7 @@ build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req)
         prices = Prices
     };
 build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req)
-        when Req#send_req.req_type =:= many_to_many ->
+        when Req#send_req.req_type =:= one_to_one ->
     EncDict = dict_from_list(Req#send_req.encoding_map),
     SizeDict = dict_from_list(Req#send_req.size_map),
     MsgDict = dict_from_list(Req#send_req.message_map),
@@ -487,7 +487,7 @@ calc_sending_price(Req) when Req#send_req.req_type =:= one_to_many ->
     Price = alley_services_coverage:calc_sending_price(
         AddrNetIdPrices, NumOfParts),
     Price;
-calc_sending_price(Req) when Req#send_req.req_type =:= many_to_many ->
+calc_sending_price(Req) when Req#send_req.req_type =:= one_to_one ->
     GtwId2Addrs = Req#send_req.routable,
     AddrNetIdPrices = lists:flatten(
         [Addrs || {_GtwId, Addrs} <- GtwId2Addrs]),
