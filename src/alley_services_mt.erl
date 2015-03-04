@@ -389,8 +389,8 @@ dict_from_list(KVs) ->
 dict_from_list([], Dict) ->
     Dict;
 dict_from_list([{K, V}| KVs], Dict) ->
-    InsertFun = fun(Acc) -> [V | Acc] end,
-    dict_from_list(KVs, dict:update(K, InsertFun, [V], Dict)).
+    Dict2 = ac_dict:prepend(K, V, Dict),
+    dict_from_list(KVs, Dict2).
 
 fetch_one(Addr, MsgIdFun, MsgDict, EncDict, SizeDict, ParamsDict) ->
     case dict:fetch(Addr, MsgDict) of

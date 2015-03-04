@@ -222,8 +222,7 @@ route_addrs_to_providers([Addr | Rest], CoverageTab, Routable, Unroutable) ->
     case alley_services_coverage:which_network(Addr, CoverageTab) of
         {NetId, MaybeFixedAddr, ProvId, Price} ->
             Tuple = {MaybeFixedAddr, NetId, Price},
-            UpdateFun = fun(Tuples) -> [Tuple | Tuples] end,
-            Routable2 = dict:update(ProvId, UpdateFun, [Tuple], Routable),
+            Routable2 = ac_dict:prepend(ProvId, Tuple, Routable),
             route_addrs_to_providers(Rest, CoverageTab, Routable2, Unroutable);
         undefined ->
             route_addrs_to_providers(Rest, CoverageTab, Routable, [Addr | Unroutable])
