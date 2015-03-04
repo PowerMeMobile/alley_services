@@ -4,6 +4,7 @@
     addr_to_dto/1,
     calc_parts_number/2,
     chars_size/2,
+    guess_encoding/1,
     convert_arabic_numbers/2,
     fmt_validity/1
 ]).
@@ -83,6 +84,23 @@ chars_size(default, Msg) ->
 chars_size(ucs2, Msg) ->
     Utf16 = unicode:characters_to_binary(Msg, utf8, utf16),
     round(byte_size(Utf16)/2).
+
+-spec guess_encoding(binary()) ->
+    {ok, default | ucs2} | {error, unknown_encoding}.
+guess_encoding(Text) ->
+    case gsm0338:from_utf8(Text) of
+        {valid, _Encoded} ->
+            {ok, default};
+        {invalid, _} ->
+            case unicode:characters_to_binary(Text, utf8, utf16) of
+                {error, _, _} ->
+                    {error, unknown_encoding};
+                {incomplete, _, _} ->
+                    {error, unknown_encoding};
+                _ ->
+                    {ok, ucs2}
+        end
+    end.
 
 -spec convert_arabic_numbers(binary(), to_arabic | to_latin) -> binary().
 convert_arabic_numbers(Text, to_arabic) ->
