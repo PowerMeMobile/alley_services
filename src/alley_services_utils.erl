@@ -3,9 +3,9 @@
 -export([
     addr_to_dto/1,
     calc_parts_number/2,
+    chars_size/2,
     convert_arabic_numbers/2,
-    fmt_validity/1,
-    encoding_size/1
+    fmt_validity/1
 ]).
 
 %-define(TEST, 1).
@@ -76,6 +76,14 @@ calc_parts_number(Size, ucs2) ->
         false -> trunc(Size/67) + 1
     end.
 
+-spec chars_size(default | ucs2, binary()) -> non_neg_integer().
+chars_size(default, Msg) ->
+    {valid, Gsm0338} = gsm0338:from_utf8(Msg),
+    byte_size(Gsm0338);
+chars_size(ucs2, Msg) ->
+    Utf16 = unicode:characters_to_binary(Msg, utf8, utf16),
+    round(byte_size(Utf16)/2).
+
 -spec convert_arabic_numbers(binary(), to_arabic | to_latin) -> binary().
 convert_arabic_numbers(Text, to_arabic) ->
     case unicode:characters_to_list(Text, utf8) of
@@ -122,13 +130,6 @@ fmt_validity(SecondsTotal) ->
         lists:flatten(io_lib:format("~2..0w~2..0w~2..0w~2..0w~2..0w~2..0w000R",
                   [Years, Months, Days, Hours, Minutes, Seconds])),
     list_to_binary(StringValidity).
-
--spec encoding_size(binary()) -> {default | ucs2, non_neg_integer()}.
-encoding_size(Msg) ->
-    case gsm0338:from_utf8(Msg) of
-        {valid, Binary} -> {default, size(Binary)};
-        {invalid, Binary} -> {ucs2, size(Binary)}
-    end.
 
 %% ===================================================================
 %% Begin Tests
