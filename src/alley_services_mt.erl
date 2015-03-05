@@ -246,12 +246,12 @@ send(build_req_dto_s, Req) ->
     send(publish_dto_s, Req#send_req{req_dto_s = ReqDTOs});
 
 send(publish_dto_s, Req) ->
-    DefDate = Req#send_req.def_date,
+    DefTime = Req#send_req.def_time,
     PublishFun =
-        case alley_services_defer:is_deferred(DefDate) of
+        case alley_services_defer:is_deferred(DefTime) of
             {true, Timestamp} ->
                 fun(ReqDTO) ->
-                    ?log_info("mt_srv: defDate -> ~p, timestamp -> ~p", [DefDate, Timestamp]),
+                    ?log_info("mt_srv: defTime -> ~p, timestamp -> ~p", [DefTime, Timestamp]),
                     {ok, Payload} = adto:encode(ReqDTO),
                     ReqId = ReqDTO#sms_req_v1.req_id,
                     GtwId = ReqDTO#sms_req_v1.gateway_id,
@@ -346,6 +346,7 @@ build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req)
         when Req#send_req.req_type =:= one_to_many ->
     CustomerId = Req#send_req.customer_id,
     UserId = Req#send_req.user_id,
+    DefTime = Req#send_req.def_time,
 
     {DestAddrs, NetIds, Prices} = lists:unzip3(AddrNetIdPrices),
 
@@ -362,8 +363,9 @@ build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req)
         customer_id = CustomerId,
         user_id = UserId,
         interface = Req#send_req.interface,
-        type = regular,
+        def_time = DefTime,
         src_addr = Req#send_req.originator,
+        type = regular,
         message = Req#send_req.message,
         encoding = Encoding,
         params = Params,
@@ -419,6 +421,7 @@ build_sms_req_v1(ReqId, GatewayId, Req, AddrNetIdPrices,
         Encoding, Params, MsgDict, SizeDict) ->
     CustomerId = Req#send_req.customer_id,
     UserId = Req#send_req.user_id,
+    DefTime = Req#send_req.def_time,
 
     {DestAddrs, NetIds, Prices} = lists:unzip3(AddrNetIdPrices),
 
@@ -435,8 +438,9 @@ build_sms_req_v1(ReqId, GatewayId, Req, AddrNetIdPrices,
         customer_id = CustomerId,
         user_id = UserId,
         interface = Req#send_req.interface,
-        type = regular,
+        def_time = DefTime,
         src_addr = Req#send_req.originator,
+        type = regular,
         message = Req#send_req.message,
         encoding = Encoding,
         params = Params,

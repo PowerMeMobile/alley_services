@@ -42,11 +42,11 @@
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
--spec defer(term(), ac_datetime:timestamp(), term()) -> ok.
+-spec defer(term(), ac_datetime:unixepoch(), term()) -> ok.
 defer(Id, Timestamp, Req) ->
     gen_server:call(?MODULE, {defer, Id, Timestamp, Req}).
 
--spec is_deferred(undefined | os:timestamp()) -> boolean().
+-spec is_deferred(undefined | ac_datetime:unixepoch()) -> boolean().
 is_deferred(undefined) ->
     false;
 is_deferred(DefDate) ->
@@ -56,7 +56,7 @@ is_deferred(DefDate) ->
 %% Service API
 %% ===================================================================
 
--spec fetch_all() -> [{term(), ac_datetime:timestamp(), term()}].
+-spec fetch_all() -> [{term(), ac_datetime:unixepoch(), term()}].
 fetch_all() ->
     dets:foldl(fun(I, Acc) -> [I | Acc] end, [], ?MODULE).
 
@@ -80,7 +80,7 @@ handle_cast(Req, St) ->
     {stop, {unexpected_cast, Req}, St}.
 
 handle_info(timeout, St) ->
-    Ts = ac_datetime:utc_timestamp(),
+    Ts = ac_datetime:utc_unixepoch(),
     DeferedTasks = qlc:e(qlc:q(
         [R || R <- dets:table(?MODULE), element(2, R) < Ts]
     )),

@@ -20,33 +20,30 @@
     %% batch message or custom tags message
     message      :: binary(),
 
-    %% one_to_many
-    encoding     :: undefined | default | ucs2,
-    size         :: undefined | non_neg_integer(),
-    params       :: undefined | [{binary(), binary() | boolean() | integer()}],
+    encoding     :: default | ucs2,
+    size         :: non_neg_integer(),
+    params       :: [{binary(), binary() | boolean() | integer()}],
 
     %% one_to_one (custom tags)
     message_map  :: undefined | [{#addr{}, binary()}],
-    encoding_map :: undefined | [{#addr{}, default | ucs2}],
     size_map     :: undefined | [{#addr{}, non_neg_integer()}],
-    params_map   :: undefined | [{#addr{}, [{binary(), binary() | boolean() | integer()}]}],
 
-    def_date     :: undefined | binary(),
+    def_time     :: undefined | utc_unix_time(),
 
-    coverage_tab :: undefined | ets:tid(),
-    routable     :: undefined | [{provider_id() | gateway_id(), [#addr{}]}],
-    rejected     :: undefined | [#addr{}],
-    req_dto_s    :: undefiend | [#sms_req_v1{}],
+    coverage_tab :: ets:tid(),
+    routable     :: [{provider_id() | gateway_id(), [#addr{}]}],
+    rejected     :: [#addr{}],
+    req_dto_s    :: [#sms_req_v1{}],
 
-    credit_left  :: undefined | float()
+    credit_left  :: float()
 }).
 
 -record(send_result, {
-    result       :: undefined | atom(),
-    req_id       :: undefined | binary(),
-    rejected     :: undefined | list(),
-    customer     :: undefined | customer(),
-    credit_left  :: undefined | float()
+    result       :: atom(),
+    req_id       :: binary(),
+    rejected     :: [#addr{}],
+    customer     :: customer(),
+    credit_left  :: float()
 }).
 
 -record('DOWN',{
