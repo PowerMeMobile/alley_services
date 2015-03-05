@@ -1,3 +1,4 @@
+%% -*- encoding: utf-8 -*-
 -module(alley_services_utils).
 
 -export([
@@ -86,20 +87,31 @@ chars_size(ucs2, Msg) ->
     round(byte_size(Utf16)/2).
 
 -spec guess_encoding(binary()) ->
-    {ok, default | ucs2} | {error, unknown_encoding}.
+    {ok, default | ucs2} | {error, unknown}.
 guess_encoding(Text) ->
-    case gsm0338:from_utf8(Text) of
-        {valid, _Encoded} ->
-            {ok, default};
-        {invalid, _} ->
+    %% workaround because latin1 doesn't support the Euro sing,
+    %% but gsm0338 has it.
+    TextWoEuro = binary:replace(Text, <<"€"/utf8>>, <<>>, [global]),
+    case unicode:characters_to_binary(TextWoEuro, utf8, latin1) of
+        {_, _, _} ->
             case unicode:characters_to_binary(Text, utf8, utf16) of
-                {error, _, _} ->
-                    {error, unknown_encoding};
-                {incomplete, _, _} ->
-                    {error, unknown_encoding};
+                {_, _, _} ->
+                    {error, unknown};
                 _ ->
                     {ok, ucs2}
-        end
+            end;
+        _Latin1WoEuro ->
+            case gsm0338:from_utf8(Text) of
+                {valid, _Encoded} ->
+                    {ok, default};
+                {invalid, _} ->
+                    case unicode:characters_to_binary(Text, utf8, utf16) of
+                        {_, _, _} ->
+                            {error, unknown};
+                        _ ->
+                        {ok, ucs2}
+                    end
+            end
     end.
 
 -spec convert_arabic_numbers(binary(), to_arabic | to_latin) -> binary().
@@ -180,6 +192,25 @@ calc_parts_number_ucs2_test() ->
     ?assertEqual(3, calc_parts_number(135, ucs2)),
     ?assertEqual(3, calc_parts_number(201, ucs2)),
     ?assertEqual(4, calc_parts_number(202, ucs2)).
+
+chars_size_test() ->
+    ?assertEqual(3, chars_size(default, <<"abc">>)),
+    %% 9 chars, 2 bytes each
+    ?assertEqual(18, chars_size(default, <<"|^€{}[~]\\"/utf8>>)),
+    ?assertEqual(5, chars_size(default, <<"abc€"/utf8>>)),
+    %% 5 unicode chars
+    ?assertEqual(5, chars_size(ucs2, <<"ذ و ن"/utf8>>)),
+    %% 6 unicode chars
+    ?assertEqual(6, chars_size(ucs2, <<"абв123"/utf8>>)),
+    ok.
+
+guess_encoding_test() ->
+    ?assertEqual({ok, default}, guess_encoding(<<"abc">>)),
+    ?assertEqual({ok, default}, guess_encoding(<<"|^€{}[~]\\"/utf8>>)),
+    ?assertEqual({ok, ucs2}, guess_encoding(<<"ذ و ن"/utf8>>)),
+    ?assertEqual({ok, ucs2}, guess_encoding(<<"абв123"/utf8>>)),
+    %% <<"абв123"/utf8>> == <<208,176,208,177,208,178,49,50,51>>
+    ?assertEqual({error, unknown}, guess_encoding(<<208,176,208,177,208,49,50,51>>)).
 
 -endif.
 
