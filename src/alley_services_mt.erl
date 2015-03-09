@@ -40,10 +40,7 @@
 }).
 
 -type payload() :: binary().
--type publish_action() ::
-    publish |
-    publish_kelly |
-    publish_just.
+-type publish_action() :: publish | publish_deferred.
 -type req_id() :: binary().
 
 %% ===================================================================
@@ -77,25 +74,8 @@ init([]) ->
             {stop, amqp_unavailable}
     end.
 
-handle_call({Action, Payload, ReqId, GtwId}, From, St = #st{}) when
-        Action =:= publish orelse
-        Action =:= publish_kelly orelse
-        Action =:= publish_just ->
-    {ok, SmsRequestQueue} = application:get_env(?APP, kelly_sms_request_queue),
-    {ok, GtwQueueFmt} = application:get_env(?APP, just_gateway_queue_fmt),
-    GtwQueue = binary:replace(GtwQueueFmt, <<"%id%">>, GtwId),
-
-    %% use rabbitMQ 'CC' extention to avoid double publish confirm per 1 request
-    {Headers, RoutingKey} =
-        case Action of
-            publish ->
-                CC = {<<"CC">>, array, [{longstr, GtwQueue}]},
-                {[CC], SmsRequestQueue};
-            publish_kelly ->
-                {[], SmsRequestQueue};
-            publish_just ->
-                {[], GtwQueue}
-        end,
+handle_call({Action, Payload, ReqId, GtwId}, From, St = #st{}) ->
+    {Headers, RoutingKey} = headers_and_routing_key(Action, GtwId),
     Props = [
         {content_type, <<"SmsReqV1z">>},
         {delivery_mode, 2},
@@ -251,13 +231,11 @@ send(publish_dto_s, Req) ->
         case alley_services_defer:is_deferred(DefTime) of
             {true, Timestamp} ->
                 fun(ReqDTO) ->
-                    ?log_info("mt_srv: defTime -> ~p, timestamp -> ~p", [DefTime, Timestamp]),
+                    ?log_info("DefTime: ~p", [Timestamp]),
                     {ok, Payload} = adto:encode(ReqDTO),
                     ReqId = ReqDTO#sms_req_v1.req_id,
                     GtwId = ReqDTO#sms_req_v1.gateway_id,
-                    ok = alley_services_defer:defer({ReqId, GtwId}, Timestamp,
-                        {publish_just, Payload, ReqId, GtwId}),
-                    ok = publish({publish_kelly, Payload, ReqId, GtwId})
+                    ok = publish({publish_deferred, Payload, ReqId, GtwId})
                 end;
             false ->
                 fun(ReqDTO) ->
@@ -291,6 +269,18 @@ send(publish_dto_s, Req) ->
 %% ===================================================================
 %% Public Confirms
 %% ===================================================================
+
+headers_and_routing_key(publish, GtwId) ->
+    {ok, SmsReqQueue} = application:get_env(?APP, kelly_sms_request_queue),
+    {ok, GtwQueueFmt} = application:get_env(?APP, just_gateway_queue_fmt),
+    GtwQueue = binary:replace(GtwQueueFmt, <<"%id%">>, GtwId),
+    %% use rabbitMQ 'CC' extention to avoid
+    %% doubling publish confirm per 1 request
+    CC = {<<"CC">>, array, [{longstr, GtwQueue}]},
+    {[CC], SmsReqQueue};
+headers_and_routing_key(publish_deferred, _GtwId) ->
+    {ok, SmsReqDefQueue} = application:get_env(?APP, kelly_sms_request_deferred_queue),
+    {[], SmsReqDefQueue}.
 
 handle_confirm(#'basic.ack'{delivery_tag = DTag, multiple = false}) ->
     reply_to(DTag, ok);
