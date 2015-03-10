@@ -228,21 +228,21 @@ send(build_req_dto_s, Req) ->
 send(publish_dto_s, Req) ->
     DefTime = Req#send_req.def_time,
     PublishFun =
-        case alley_services_defer:is_deferred(DefTime) of
-            {true, Timestamp} ->
-                fun(ReqDTO) ->
-                    ?log_info("DefTime: ~p", [Timestamp]),
-                    {ok, Payload} = adto:encode(ReqDTO),
-                    ReqId = ReqDTO#sms_req_v1.req_id,
-                    GtwId = ReqDTO#sms_req_v1.gateway_id,
-                    ok = publish({publish_deferred, Payload, ReqId, GtwId})
-                end;
-            false ->
+        case DefTime of
+            undefined ->
                 fun(ReqDTO) ->
                     {ok, Payload} = adto:encode(ReqDTO),
                     ReqId = ReqDTO#sms_req_v1.req_id,
                     GtwId = ReqDTO#sms_req_v1.gateway_id,
                     ok = publish({publish, Payload, ReqId, GtwId})
+                end;
+            DefTime ->
+                fun(ReqDTO) ->
+                    ?log_info("DefTime: ~p", [DefTime]),
+                    {ok, Payload} = adto:encode(ReqDTO),
+                    ReqId = ReqDTO#sms_req_v1.req_id,
+                    GtwId = ReqDTO#sms_req_v1.gateway_id,
+                    ok = publish({publish_deferred, Payload, ReqId, GtwId})
                 end
         end,
 
