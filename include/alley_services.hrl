@@ -15,7 +15,7 @@
     originator   :: #addr{},
     recipients   :: [#addr{}],
 
-    req_type     :: one_to_many | one_to_one,
+    req_type     :: single | multiple,
 
     %% batch message or custom tags message
     message      :: binary(),
@@ -24,7 +24,7 @@
     size         :: non_neg_integer(),
     params       :: [{binary(), binary() | boolean() | integer()}],
 
-    %% one_to_one (custom tags)
+    %% multiple (custom tags)
     message_map  :: undefined | [{#addr{}, binary()}],
     size_map     :: undefined | [{#addr{}, non_neg_integer()}],
 
