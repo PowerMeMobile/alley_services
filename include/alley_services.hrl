@@ -28,7 +28,7 @@
     message_map  :: undefined | [{#addr{}, binary()}],
     size_map     :: undefined | [{#addr{}, non_neg_integer()}],
 
-    def_time     :: undefined | utc_unix_time(),
+    def_time     :: undefined | utc_timestamp(),
 
     coverage_tab :: ets:tid(),
     routable     :: [{provider_id() | gateway_id(), [#addr{}]}],
