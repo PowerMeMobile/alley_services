@@ -52,15 +52,24 @@ get_coverage(CustomerId) ->
     },
     ?log_debug("Sending coverage request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
+    %% rmql_rpc_client:call should return {ok, CT, Bin}
     case rmql_rpc_client:call(?MODULE, ReqBin, <<"CoverageReqV1">>) of
         {ok, RespBin} ->
+            %% <<"CoverageRespV1">>
             case adto:decode(#coverage_resp_v1{}, RespBin) of
                 {ok, Resp = #coverage_resp_v1{}} ->
                     ?log_debug("Got coverage response: ~p", [Resp]),
                     {ok, Resp};
                 {error, Error} ->
-                    ?log_error("Coverage response decode error: ~p", [Error]),
-                    {error, Error}
+                    %% <<"ErrorRespV1">>
+                    case adto:decode(#error_resp_v1{}, RespBin) of
+                        {ok, #error_resp_v1{error = RespError}} ->
+                            ?log_error("Got coverage error: ~p", [RespError]),
+                            {error, RespError};
+                        {error, Error2} ->
+                            ?log_error("Coverage response decode error: ~p, ~p", [Error, Error2]),
+                            {error, Error}
+                    end
             end;
         {error, timeout} ->
             ?log_debug("Got coverage response: timeout", []),
