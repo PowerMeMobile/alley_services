@@ -28,6 +28,7 @@
     message_map  :: undefined | [{#addr{}, binary()}],
     size_map     :: undefined | [{#addr{}, non_neg_integer()}],
 
+    req_time     :: utc_timestamp(),
     def_time     :: undefined | utc_timestamp(),
 
     coverage_tab :: ets:tid(),

@@ -219,8 +219,10 @@ send(check_billing, Req) ->
 send(build_req_dto_s, Req) ->
     ReqId = uuid:unparse(uuid:generate_time()),
     Destinations = Req#send_req.routable,
+    ReqTime = ac_datetime:utc_timestamp(),
+    Req2 = Req#send_req{req_time = ReqTime},
     ReqDTOs = lists:flatten([
-        build_req_dto(ReqId, GtwId, AddrNetIdPrices, Req) ||
+        build_req_dto(ReqId, GtwId, AddrNetIdPrices, Req2) ||
         {GtwId, AddrNetIdPrices} <- Destinations
     ]),
     send(publish_dto_s, Req#send_req{req_dto_s = ReqDTOs});
@@ -336,6 +338,7 @@ build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req)
         when Req#send_req.req_type =:= single ->
     CustomerId = Req#send_req.customer_id,
     UserId = Req#send_req.user_id,
+    ReqTime = Req#send_req.req_time,
     DefTime = Req#send_req.def_time,
 
     {DestAddrs, NetIds, Prices} = lists:unzip3(AddrNetIdPrices),
@@ -353,6 +356,7 @@ build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req)
         customer_id = CustomerId,
         user_id = UserId,
         interface = Req#send_req.interface,
+        req_time = ReqTime,
         def_time = DefTime,
         src_addr = Req#send_req.originator,
         type = regular,
@@ -411,6 +415,7 @@ build_sms_req_v1(ReqId, GatewayId, Req, AddrNetIdPrices,
         Encoding, Params, MsgDict, SizeDict) ->
     CustomerId = Req#send_req.customer_id,
     UserId = Req#send_req.user_id,
+    ReqTime = Req#send_req.req_time,
     DefTime = Req#send_req.def_time,
 
     {DestAddrs, NetIds, Prices} = lists:unzip3(AddrNetIdPrices),
@@ -428,6 +433,7 @@ build_sms_req_v1(ReqId, GatewayId, Req, AddrNetIdPrices,
         customer_id = CustomerId,
         user_id = UserId,
         interface = Req#send_req.interface,
+        req_time = ReqTime,
         def_time = DefTime,
         src_addr = Req#send_req.originator,
         type = regular,
