@@ -147,7 +147,7 @@ calc_sending_price(Addr2NetIdAndPrice, NumOfMsgs) ->
 %% ===================================================================
 
 prefixes(Number, PrefixLens) ->
-    [binary:part(Number, {0, L}) || L <- PrefixLens, L < size(Number)].
+    [binary:part(Number, {0, L}) || L <- PrefixLens, L =< size(Number)].
 
 flatten_networks(Networks, DefProvId) ->
     lists:flatmap(fun(Network) ->
@@ -485,6 +485,16 @@ which_network_test() ->
             provider_id = <<"PID1">>,
             sms_points = 3.0,
             sms_mult_points = 1.0
+        },
+        #network_v1{
+            %% full prefix number
+            id = <<"NID4">>,
+            country_code = <<"241">>,
+            number_len = 11,
+            prefixes = [<<"07290637">>],
+            provider_id = <<"PID1">>,
+            sms_points = 5.0,
+            sms_mult_points = 1.0
         }
     ],
     Providers = providers(),
@@ -534,6 +544,11 @@ which_network_test() ->
                   <<"PID1">>,
                   3.0},
                   which_network(#addr{addr = <<"00999083333333">>, ton = 1, npi = 0}, Tab)),
+    ?assertEqual({<<"NID4">>,
+                  #addr{addr = <<"24107290637">>, ton = 1, npi = 1},
+                  <<"PID1">>,
+                  5.0},
+                  which_network(#addr{addr = <<"24107290637">>, ton = 1, npi = 0}, Tab)),
     %% MAYBE should be a new case
     %% ?assertEqual({<<"06561b4c-d7b2-4cab-b031-af2a90c31491">>,
     %%               #addr{addr = <<"999011333333">>, ton = 1, npi = 1}, <<"PID1">>},
