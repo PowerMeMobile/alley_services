@@ -385,31 +385,31 @@ dict_from_list([{K, V}| KVs], Dict) ->
     Dict2 = ac_dict:prepend(K, V, Dict),
     dict_from_list(KVs, Dict2).
 
-fetch_one(Addr, MsgIdFun, Enc, MsgDict, SizeDict) ->
+fetch_one(Addr, MsgIdFun2, Enc, MsgDict, SizeDict) ->
     case dict:fetch(Addr, MsgDict) of
         [Msg] ->
             [Size] = dict:fetch(Addr, SizeDict),
-            MsgId = MsgIdFun(Enc, Size),
+            MsgId = MsgIdFun2(Enc, Size),
             {MsgId, Msg, MsgDict, SizeDict};
         [Msg|_] ->
             [Size|_] = dict:fetch(Addr, SizeDict),
-            MsgId = MsgIdFun(Enc, Size),
+            MsgId = MsgIdFun2(Enc, Size),
             RemoveFun = fun([_|Acc]) -> Acc end,
             {MsgId, Msg,
              dict:update(Addr, RemoveFun, MsgDict),
              dict:update(Addr, RemoveFun, SizeDict)}
     end.
 
-fetch_all(Addrs, MsgIdFun, Enc, MsgDict, SizeDict) ->
-    fetch_all(Addrs, MsgIdFun, Enc, MsgDict, SizeDict, []).
+fetch_all(Addrs, MsgIdFun2, Enc, MsgDict, SizeDict) ->
+    fetch_all(Addrs, MsgIdFun2, Enc, MsgDict, SizeDict, []).
 
-fetch_all([], _MsgIdFun, _Enc, _MsgDict, _SizeDict, Acc) ->
+fetch_all([], _MsgIdFun2, _Enc, _MsgDict, _SizeDict, Acc) ->
     lists:reverse(Acc);
-fetch_all([Addr|Addrs], MsgIdFun, Enc, MsgDict, SizeDict, Acc) ->
+fetch_all([Addr|Addrs], MsgIdFun2, Enc, MsgDict, SizeDict, Acc) ->
    {MsgId, Msg, MsgDict2, SizeDict2} =
-        fetch_one(Addr, MsgIdFun, Enc, MsgDict, SizeDict),
+        fetch_one(Addr, MsgIdFun2, Enc, MsgDict, SizeDict),
    Acc2 = [{MsgId, Msg} | Acc],
-   fetch_all(Addrs, MsgIdFun, Enc, MsgDict2, SizeDict2, Acc2).
+   fetch_all(Addrs, MsgIdFun2, Enc, MsgDict2, SizeDict2, Acc2).
 
 build_sms_req_v1(ReqId, GatewayId, Req, AddrNetIdPrices,
         Encoding, Params, MsgDict, SizeDict) ->
@@ -420,12 +420,12 @@ build_sms_req_v1(ReqId, GatewayId, Req, AddrNetIdPrices,
 
     {DestAddrs, NetIds, Prices} = lists:unzip3(AddrNetIdPrices),
 
-    MsgIdFun = fun(Enc, Size) ->
+    MsgIdFun2 = fun(Enc, Size) ->
         NumOfParts = alley_services_utils:calc_parts_number(Size, Enc),
         get_id(CustomerId, UserId, NumOfParts)
     end,
     {MsgIds, Msgs} = lists:unzip(
-        fetch_all(DestAddrs, MsgIdFun, Encoding, MsgDict, SizeDict)),
+        fetch_all(DestAddrs, MsgIdFun2, Encoding, MsgDict, SizeDict)),
 
     #sms_req_v1{
         req_id = ReqId,
