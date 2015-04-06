@@ -221,10 +221,12 @@ send(build_req_dto_s, Req) ->
     Destinations = Req#send_req.routable,
     ReqTime = ac_datetime:utc_timestamp(),
     Req2 = Req#send_req{req_time = ReqTime},
+    ok = alley_services_id_generator:init(ReqId),
     ReqDTOs = lists:flatten([
         build_req_dto(ReqId, GtwId, AddrNetIdPrices, Req2) ||
         {GtwId, AddrNetIdPrices} <- Destinations
     ]),
+    ok = alley_services_id_generator:deinit(ReqId),
     send(publish_dto_s, Req#send_req{req_dto_s = ReqDTOs});
 
 send(publish_dto_s, Req) ->
@@ -347,7 +349,7 @@ build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req)
     NumOfSymbols = Req#send_req.size,
     NumOfDests = length(DestAddrs),
     NumOfParts = alley_services_utils:calc_parts_number(NumOfSymbols, Encoding),
-    MsgIds = get_ids(CustomerId, UserId, NumOfDests, NumOfParts),
+    MsgIds = get_next_msg_ids(ReqId, NumOfDests, NumOfParts),
     Params = Req#send_req.params,
 
     #sms_req_v1{
@@ -422,7 +424,7 @@ build_sms_req_v1(ReqId, GatewayId, Req, AddrNetIdPrices,
 
     MsgIdFun2 = fun(Enc, Size) ->
         NumOfParts = alley_services_utils:calc_parts_number(Size, Enc),
-        get_id(CustomerId, UserId, NumOfParts)
+        get_next_msg_id(ReqId, NumOfParts)
     end,
     {MsgIds, Msgs} = lists:unzip(
         fetch_all(DestAddrs, MsgIdFun2, Encoding, MsgDict, SizeDict)),
@@ -447,13 +449,13 @@ build_sms_req_v1(ReqId, GatewayId, Req, AddrNetIdPrices,
         prices = Prices
     }.
 
-get_id(CustomerId, UserId, Parts) ->
-    {ok, Ids} = alley_services_db:next_id(CustomerId, UserId, Parts),
+get_next_msg_id(ReqId, Parts) ->
+    Ids = alley_services_id_generator:next_ids(ReqId, Parts),
     Ids2 = [integer_to_list(Id) || Id <- Ids],
     list_to_binary(string:join(Ids2, ":")).
 
-get_ids(CustomerId, UserId, NumberOfDests, Parts) ->
-    {ok, Ids} = alley_services_db:next_id(CustomerId, UserId, NumberOfDests * Parts),
+get_next_msg_ids(ReqId, NumberOfDests, Parts) ->
+    Ids = alley_services_id_generator:next_ids(ReqId, NumberOfDests * Parts),
     {DTOIds, []} =
         lists:foldl(
           fun(Id, {Acc, Group}) when (length(Group) + 1) =:= Parts ->
