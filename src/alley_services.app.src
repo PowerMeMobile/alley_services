@@ -9,7 +9,8 @@
         gproc,
         gsm0338,
         libuuid,
-        alley_common
+        alley_common,
+        alley_dto
     ]},
     {mod, {alley_services_app, []}},
     {env, []}
