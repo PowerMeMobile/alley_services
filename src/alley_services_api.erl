@@ -26,6 +26,7 @@
 -include_lib("alley_dto/include/adto.hrl").
 -include_lib("alley_common/include/logging.hrl").
 
+-type customer_uuid() :: uuid().
 -type customer_id() :: binary().
 -type user_id()     :: binary().
 -type request_id()  :: binary().
@@ -348,32 +349,34 @@ unsubscribe_incoming_sms(ReqId, CustomerId, UserId, SubscriptionId) ->
 
 -type inbox_operation() :: list_all | list_new
                          | fetch_all | fetch_new | fetch_id
-                         | kill_all | kill_old | kill_id.
+                         | delete_all | delete_read | delete_id.
 -type message_ids()     :: [binary()].
--spec process_inbox(customer_id(), user_id(), inbox_operation(), message_ids()) ->
-    {ok, #k1api_process_inbox_response_dto{}} | {error, term()}.
-process_inbox(CustomerId, UserId, Operation, MessageIds) ->
+-spec process_inbox(customer_uuid(), user_id(), inbox_operation(), message_ids()) ->
+    {ok, #inbox_resp_v1{}} | {error, term()}.
+process_inbox(CustomerUuid, UserId, Operation, MsgIds) ->
     ReqId = uuid:unparse(uuid:generate_time()),
-    Req = #k1api_process_inbox_request_dto{
-        id = ReqId,
-        customer_id = CustomerId,
+    Req = #inbox_req_v1{
+        req_id = ReqId,
+        customer_uuid = CustomerUuid,
         user_id = UserId,
         operation = Operation,
-        message_ids = MessageIds
+        msg_ids = MsgIds
     },
-    ?log_debug("Sending process inbox request: ~p", [Req]),
+    ?log_debug("Sending inbox request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
-    case rmql_rpc_client:call(?MODULE, ReqBin, <<"ProcessInboxReq">>) of
+    case rmql_rpc_client:call(?MODULE, ReqBin, <<"InboxReqV1">>) of
+        %% rmql_rpc_client:call should return {ok, CT, Bin}
         {ok, RespBin} ->
-            case adto:decode(#k1api_process_inbox_response_dto{}, RespBin) of
+            %% <<"InboxRespV1">>
+            case adto:decode(#inbox_resp_v1{}, RespBin) of
                 {ok, Resp} ->
-                    ?log_debug("Got process inbox response: ~p", [Resp]),
+                    ?log_debug("Got inbox response: ~p", [Resp]),
                     {ok, Resp};
                 {error, Error} ->
-                    ?log_error("Process inbox response decode error: ~p", [Error]),
+                    ?log_error("Inbox response decode error: ~p", [Error]),
                     {error, Error}
             end;
         {error, timeout} ->
-            ?log_error("Process inbox response: timeout", []),
+            ?log_error("Inbox response: timeout", []),
             {error, timeout}
     end.
