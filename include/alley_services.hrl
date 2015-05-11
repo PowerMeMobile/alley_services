@@ -4,8 +4,8 @@
 -include_lib("alley_dto/include/adto.hrl").
 
 -type customer()    :: #auth_customer_v1{}.
--type provider_id() :: binary().
--type gateway_id()  :: binary().
+-type provider_id() :: uuid().
+-type gateway_id()  :: uuid().
 
 -record(send_req, {
     customer      :: customer(),
