@@ -196,18 +196,18 @@ send(route_to_gateways, Req) ->
     end;
 
 send(check_billing, Req) ->
-    CustomerId = Req#send_req.customer_id,
+    CustomerUuid = Req#send_req.customer_uuid,
     Price = calc_sending_price(Req),
-    ?log_debug("Check billing (customer_id: ~p, sending price: ~p)",
-        [CustomerId, Price]),
-    case alley_services_api:request_credit(CustomerId, Price) of
+    ?log_debug("Check billing (customer_uuid: ~p, sending price: ~p)",
+        [CustomerUuid, Price]),
+    case alley_services_api:request_credit(CustomerUuid, Price) of
         {allowed, CreditLeft} ->
-            ?log_debug("Sending allowed. CustomerId: ~p, credit left: ~p",
-                [CustomerId, CreditLeft]),
+            ?log_debug("Sending allowed. CustomerUuid: ~p, credit left: ~p",
+                [CustomerUuid, CreditLeft]),
              send(build_req_dto_s, Req#send_req{credit_left = CreditLeft});
         {denied, CreditLeft} ->
-            ?log_error("Sending denied. CustomerId: ~p, credit left: ~p",
-                [CustomerId, CreditLeft]),
+            ?log_error("Sending denied. CustomerUuid: ~p, credit left: ~p",
+                [CustomerUuid, CreditLeft]),
             {ok, #send_result{
                 result = credit_limit_exceeded,
                 credit_left = CreditLeft
@@ -338,7 +338,7 @@ setup_chan(St = #st{}) ->
 
 build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req)
         when Req#send_req.req_type =:= single ->
-    CustomerId = Req#send_req.customer_id,
+    CustomerUuid = Req#send_req.customer_uuid,
     UserId = Req#send_req.user_id,
     ReqTime = Req#send_req.req_time,
     DefTime = Req#send_req.def_time,
@@ -355,7 +355,7 @@ build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req)
     #sms_req_v1{
         req_id = ReqId,
         gateway_id = GatewayId,
-        customer_id = CustomerId,
+        customer_id = CustomerUuid,
         user_id = UserId,
         interface = Req#send_req.interface,
         req_time = ReqTime,
@@ -415,7 +415,7 @@ fetch_all([Addr|Addrs], MsgIdFun2, Enc, MsgDict, SizeDict, Acc) ->
 
 build_sms_req_v1(ReqId, GatewayId, Req, AddrNetIdPrices,
         Encoding, Params, MsgDict, SizeDict) ->
-    CustomerId = Req#send_req.customer_id,
+    CustomerUuid = Req#send_req.customer_uuid,
     UserId = Req#send_req.user_id,
     ReqTime = Req#send_req.req_time,
     DefTime = Req#send_req.def_time,
@@ -432,7 +432,7 @@ build_sms_req_v1(ReqId, GatewayId, Req, AddrNetIdPrices,
     #sms_req_v1{
         req_id = ReqId,
         gateway_id = GatewayId,
-        customer_id = CustomerId,
+        customer_id = CustomerUuid,
         user_id = UserId,
         interface = Req#send_req.interface,
         req_time = ReqTime,
