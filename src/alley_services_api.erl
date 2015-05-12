@@ -354,6 +354,12 @@ unsubscribe_incoming_sms(ReqId, CustomerId, UserId, SubscriptionId) ->
 -type message_ids()     :: [binary()].
 -spec process_inbox(customer_uuid(), user_id(), inbox_operation(), message_ids()) ->
     {ok, #inbox_resp_v1{}} | {error, term()}.
+process_inbox(_CustomerUuid, _UserId, Oper, _MsgIds)
+    when Oper =/= get_info,
+         Oper =/= list_all, Oper =/= list_new,
+         Oper =/= fetch_all, Oper =/= fetch_new, Oper =/= fetch_id,
+         Oper =/= delete_all, Oper =/= delete_read, Oper =/= delete_id ->
+    {error, bad_operation};
 process_inbox(CustomerUuid, UserId, Operation, MsgIds) ->
     ReqId = uuid:unparse(uuid:generate_time()),
     Req = #inbox_req_v1{
