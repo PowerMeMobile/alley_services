@@ -347,7 +347,8 @@ unsubscribe_incoming_sms(ReqId, CustomerId, UserId, SubscriptionId) ->
             {error, timeout}
     end.
 
--type inbox_operation() :: list_all | list_new
+-type inbox_operation() :: get_info
+                         | list_all | list_new
                          | fetch_all | fetch_new | fetch_id
                          | delete_all | delete_read | delete_id.
 -type message_ids()     :: [binary()].
