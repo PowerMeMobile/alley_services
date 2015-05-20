@@ -136,16 +136,16 @@ get_sms_status(CustomerId, UserId, SmsReqId) ->
             {error, timeout}
     end.
 
--spec retrieve_sms(customer_id(), user_id(), dst_addr(), pos_integer()) ->
+-spec retrieve_sms(customer_uuid(), user_id(), dst_addr(), pos_integer()) ->
     {ok, [#retrieve_sms_resp_v1{}]} | {error, term()}.
-retrieve_sms(_CustomerId, _UserId, _DestAddr, BatchSize)
+retrieve_sms(_CustomerUuid, _UserId, _DestAddr, BatchSize)
         when is_integer(BatchSize), BatchSize =< 0 ->
     {error, invalid_bax_match_size};
-retrieve_sms(CustomerId, UserId, DestAddr, BatchSize) ->
+retrieve_sms(CustomerUuid, UserId, DestAddr, BatchSize) ->
     ReqId = uuid:unparse(uuid:generate_time()),
     Req = #retrieve_sms_req_v1{
         req_id = ReqId,
-        customer_id = CustomerId,
+        customer_uuid = CustomerUuid,
         user_id = UserId,
         dst_addr = DestAddr,
         batch_size = BatchSize
