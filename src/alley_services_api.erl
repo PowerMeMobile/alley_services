@@ -11,15 +11,16 @@
     get_coverage/1,
     get_blacklist/0,
     get_sms_status/3,
-    retrieve_sms/4,
     request_credit/2,
 
+    process_inbox/4,
+
+    %% OneAPI specific
+    retrieve_incoming/4,
     subscribe_sms_receipts/6,
     unsubscribe_sms_receipts/4,
     subscribe_incoming_sms/8,
-    unsubscribe_incoming_sms/4,
-
-    process_inbox/4
+    unsubscribe_incoming_sms/4
 ]).
 
 -include("application.hrl").
@@ -136,34 +137,34 @@ get_sms_status(CustomerId, UserId, SmsReqId) ->
             {error, timeout}
     end.
 
--spec retrieve_sms(customer_uuid(), user_id(), dst_addr(), pos_integer()) ->
-    {ok, [#retrieve_sms_resp_v1{}]} | {error, term()}.
-retrieve_sms(_CustomerUuid, _UserId, _DestAddr, BatchSize)
+-spec retrieve_incoming(customer_uuid(), user_id(), dst_addr(), pos_integer()) ->
+    {ok, [#retrieve_incoming_resp_v1{}]} | {error, term()}.
+retrieve_incoming(_CustomerUuid, _UserId, _DestAddr, BatchSize)
         when is_integer(BatchSize), BatchSize =< 0 ->
     {error, invalid_bax_match_size};
-retrieve_sms(CustomerUuid, UserId, DestAddr, BatchSize) ->
+retrieve_incoming(CustomerUuid, UserId, DestAddr, BatchSize) ->
     ReqId = uuid:unparse(uuid:generate_time()),
-    Req = #retrieve_sms_req_v1{
+    Req = #retrieve_incoming_req_v1{
         req_id = ReqId,
         customer_uuid = CustomerUuid,
         user_id = UserId,
         dst_addr = DestAddr,
         batch_size = BatchSize
     },
-    ?log_debug("Sending retrieve sms request: ~p", [Req]),
+    ?log_debug("Sending retrieve incoming request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
-    case rmql_rpc_client:call(?MODULE, ReqBin, <<"RetrieveSmsReqV1">>) of
+    case rmql_rpc_client:call(?MODULE, ReqBin, <<"RetrieveIncomingReqV1">>) of
         {ok, RespBin} ->
-            case adto:decode(#retrieve_sms_resp_v1{}, RespBin) of
-                {ok, Resp = #retrieve_sms_resp_v1{}} ->
-                    ?log_debug("Got retrieve sms response: ~p", [Resp]),
+            case adto:decode(#retrieve_incoming_resp_v1{}, RespBin) of
+                {ok, Resp = #retrieve_incoming_resp_v1{}} ->
+                    ?log_debug("Got retrieve incoming response: ~p", [Resp]),
                     {ok, Resp};
                 {error, Error} ->
-                    ?log_error("Retrive sms response decode error: ~p", [Error]),
+                    ?log_error("Retrive incoming response decode error: ~p", [Error]),
                     {error, Error}
             end;
         {error, timeout} ->
-            ?log_error("Got retrive sms response: timeout", []),
+            ?log_error("Got retrive incoming response: timeout", []),
             {error, timeout}
     end.
 
