@@ -355,7 +355,7 @@ build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req)
     #sms_req_v1{
         req_id = ReqId,
         gateway_id = GatewayId,
-        customer_id = CustomerUuid,
+        customer_uuid = CustomerUuid,
         user_id = UserId,
         interface = Req#send_req.interface,
         req_time = ReqTime,
@@ -432,7 +432,7 @@ build_sms_req_v1(ReqId, GatewayId, Req, AddrNetIdPrices,
     #sms_req_v1{
         req_id = ReqId,
         gateway_id = GatewayId,
-        customer_id = CustomerUuid,
+        customer_uuid = CustomerUuid,
         user_id = UserId,
         interface = Req#send_req.interface,
         req_time = ReqTime,

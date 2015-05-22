@@ -39,7 +39,7 @@
 -type log_level() :: debug | none.
 
 -record(st, {
-    customer_id :: binary(),
+    customer_uuid :: binary(),
     user_id     :: binary(),
     fd          :: tuple(),
     file_name   :: string(),
@@ -92,26 +92,26 @@ get_loglevel(CustomerId, UserId) ->
 
 -spec log(#sms_req_v1{}) -> ok.
 log(SmsReq = #sms_req_v1{
-    customer_id = CustomerId,
+    customer_uuid = CustomerUuid,
     user_id = UserId
 }) ->
-    do_log(CustomerId, UserId, SmsReq).
+    do_log(CustomerUuid, UserId, SmsReq).
 
 %% ===================================================================
 %% gen_server callbacks
 %% ===================================================================
 
-init({CustomerId, UserId}) ->
+init({CustomerUuid, UserId}) ->
     process_flag(trap_exit, true),
     {ok, LogLevel} = application:get_env(?APP, pdu_log_level),
     {ok, LogSize} = application:get_env(?APP, pdu_log_size),
     ?MODULE:set_loglevel(self(), LogLevel),
     %% To ingore gproc exceptions and CRASH reports in log files
     %% on concurent gproc:add_local_name call
-    try gproc:add_local_name({CustomerId, UserId}) of
+    try gproc:add_local_name({CustomerUuid, UserId}) of
         true ->
-            ?log_info("pdu_logger: started (~s:~s)", [CustomerId, UserId]),
-            {ok, #st{customer_id = CustomerId,
+            ?log_info("pdu_logger: started (~s:~s)", [CustomerUuid, UserId]),
+            {ok, #st{customer_uuid = CustomerUuid,
                     user_id = UserId,
                     log_level = none,
                     max_size = LogSize}}
@@ -140,7 +140,7 @@ handle_cast({set_loglevel, none}, St = #st{}) ->
     close_and_rename_prev_file(St),
     erlang:cancel_timer(St#st.tref),
     ?log_info("pdu_logger: set loglevel to none (~s:~s)",
-        [St#st.customer_id, St#st.user_id]),
+        [St#st.customer_uuid, St#st.user_id]),
     {noreply, St#st{log_level = none,
                     tref = undefined,
                     fd = undefined,
@@ -153,7 +153,7 @@ handle_cast({set_loglevel, LogLevel}, #st{log_level = none} = St) ->
     TRef = erlang:start_timer(?midnightCheckInterval, self(), midnight_check),
     St2 = open_log_file(St#st{tref = TRef, log_level = LogLevel}),
     ?log_info("pdu_logger: set loglevel to ~p (~s:~s)",
-        [LogLevel, St#st.customer_id, St#st.user_id]),
+        [LogLevel, St#st.customer_uuid, St#st.user_id]),
     {noreply, St2};
 %%% change loglevel
 handle_cast({set_loglevel, LogLevel}, St) ->
@@ -184,7 +184,7 @@ terminate(Reason, St = #st{}) ->
     end,
     catch(gproc:goodbye()),
     ?log_info("pdu_logger: terminated (~s:~s) (~p)",
-        [St#st.customer_id, St#st.user_id, Reason]).
+        [St#st.customer_uuid, St#st.user_id, Reason]).
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
@@ -222,7 +222,7 @@ ensure_actual_date(St) ->
         Date -> St;
         _ ->
             ?log_info("pdu_logger: date changed (~s:~s)",
-                [St#st.customer_id, St#st.user_id]),
+                [St#st.customer_uuid, St#st.user_id]),
             close_and_rename_prev_file(St),
             open_log_file(St)
     end.
@@ -245,7 +245,7 @@ close_and_rename_prev_file(St) ->
     ClosedName = filename:join(log_dir(St#st.date),
                                fmt_time(St#st.first_entry) ++ "_" ++
                                fmt_time(St#st.last_entry)  ++ "_" ++
-                               binary_to_list(St#st.customer_id) ++ "_" ++
+                               binary_to_list(St#st.customer_uuid) ++ "_" ++
                                binary_to_list(St#st.user_id) ++ ".log"),
     file:rename(St#st.file_name, ClosedName),
     St#st{file_name = undefined, fd = undefined}.
@@ -253,7 +253,7 @@ close_and_rename_prev_file(St) ->
 new_file_name(Date, Time, St) ->
     filename:join(  log_dir(Date),
                     fmt_time(Time) ++ "_present_" ++
-                    binary_to_list(St#st.customer_id) ++ "_" ++
+                    binary_to_list(St#st.customer_uuid) ++ "_" ++
                     binary_to_list(St#st.user_id) ++ ".log").
 
 log_dir(Date) ->
