@@ -12,7 +12,7 @@
 ]).
 
 %% Cowboy onresponse hook callback
--export([log/5]).
+-export([log/7]).
 
 %% gen_server callbacks
 -export([
@@ -33,6 +33,7 @@
 -define(midnightCheckInterval, 5000).
 
 -type log_level() :: debug | info | none.
+-type datetime() :: calendar:datetime().
 
 -record(st, {
     fd          :: pid(),
@@ -49,8 +50,10 @@
     resp_code :: non_neg_integer(),
     resp_headers :: cowboy:http_headers(),
     resp_body :: binary(),
+    resp_time :: datetime(),
     req :: cowboy_req:req(),
-    req_body :: binary()
+    req_body :: binary(),
+    req_time :: datetime()
 }).
 
 %% ===================================================================
@@ -76,14 +79,17 @@ get_loglevel() ->
 %% Cowboy onresponse hook callback
 %% ===================================================================
 
--spec log(non_neg_integer(), list(), binary(), cowboy_req:req(), binary()) -> ok.
-log(RespCode, RespHeaders, RespBody, Req, ReqBody) ->
+-spec log(non_neg_integer(), list(), binary(), datetime(),
+          cowboy_req:req(), binary(), datetime()) -> ok.
+log(RespCode, RespHeaders, RespBody, RespTime, Req, ReqBody, ReqTime) ->
     LogTask = #log{
         resp_code = RespCode,
         resp_headers = RespHeaders,
         resp_body = RespBody,
+        resp_time = RespTime,
         req = Req,
-        req_body = ReqBody
+        req_body = ReqBody,
+        req_time = ReqTime
     },
     gen_server:cast(?MODULE, LogTask).
 
@@ -252,9 +258,13 @@ fmt_apache_log(LD = #log{}) ->
     ClientIP = io_lib:format("~p.~p.~p.~p",[IP0,IP1,IP2,IP3]),
 
     %% compose log time
-    {{Y,M,D},{H,Min,S}} = calendar:universal_time(),
+    ReqTime = {{Y,M,D},{H,Min,S}} = LD#log.req_time,
+    RespTime = LD#log.resp_time,
     Month = httpd_util:month(M),
-    LogTime = io_lib:format("~2..0w/~s/~w:~2..0w:~2..0w:~2..0w -0000", [D,Month,Y,H,Min,S]),
+    LogReqTime = io_lib:format("~2..0w/~s/~w:~2..0w:~2..0w:~2..0w -0000", [D,Month,Y,H,Min,S]),
+
+    ProcessTime = calendar:datetime_to_gregorian_seconds(RespTime) -
+                  calendar:datetime_to_gregorian_seconds(ReqTime),
 
     %% compose response size
     RespSize = size(LD#log.resp_body),
@@ -274,5 +284,5 @@ fmt_apache_log(LD = #log{}) ->
     {UserAgent, Req} = cowboy_req:header(<<"user-agent">>, Req, "-"),
 
     %% final apache like log line
-    io_lib:format("~s - - [~s] \"~s\" ~p ~p ~p \"~s\"~n",
-        [ClientIP, LogTime, ReqLine, LD#log.resp_code, RespSize, "-", UserAgent]).
+    io_lib:format("~s - - [~s] \"~s\" ~p ~p ~p \"~s\" *~p* ~n",
+        [ClientIP, LogReqTime, ReqLine, LD#log.resp_code, RespSize, "-", UserAgent, ProcessTime]).
