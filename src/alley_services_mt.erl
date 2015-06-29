@@ -196,9 +196,6 @@ send(route_to_gateways, Req) ->
     end;
 
 send(check_invalid_recipient_policy, Req)
-        when Req#send_req.invalid_recipient_policy =:= ignore_invalid ->
-    send(remove_rejected_for_multiple_type, Req);
-send(check_invalid_recipient_policy, Req)
         when Req#send_req.invalid_recipient_policy =:= reject_message ->
     case Req#send_req.rejected of
         [] ->
@@ -206,6 +203,8 @@ send(check_invalid_recipient_policy, Req)
         _ ->
             {ok, #send_result{result = rejected_by_invalid_recipient_policy}}
     end;
+send(check_invalid_recipient_policy, Req) ->
+    send(remove_rejected_for_multiple_type, Req);
 
 send(remove_rejected_for_multiple_type, Req)
         when Req#send_req.req_type =:= multiple ->
