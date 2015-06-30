@@ -5,7 +5,8 @@
 %% API
 -export([
     start_link/0,
-    authenticate/4
+    authenticate/4,
+    authenticate_by_email/2
 ]).
 
 -include("application.hrl").
@@ -47,6 +48,31 @@ authenticate(CustomerId, UserId, Interface, Password) ->
             end
     end.
 
+-spec authenticate_by_email(binary(), binary()) ->
+    {ok, #auth_resp_v2{}} | {error, timeout}.
+authenticate_by_email(Email, Interface) ->
+    case request_backend(Email, Interface) of
+        {ok, AuthResp = #auth_resp_v2{result = Result}} ->
+            case Result of
+                #auth_customer_v1{} ->
+                    ok = alley_services_auth_cache:store_by_email(
+                        Email, Interface, AuthResp);
+                #auth_error_v2{} ->
+                    ok
+            end,
+            {ok, AuthResp};
+        {error, timeout} ->
+            ?log_debug("Trying auth cache...", []),
+            case alley_services_auth_cache:fetch_by_email(Email, Interface) of
+                {ok, AuthResp} ->
+                    ?log_debug("Found auth response: ~p", [AuthResp]),
+                    {ok, AuthResp};
+                not_found ->
+                    ?log_error("Not found auth response.", []),
+                    {error, timeout}
+            end
+    end.
+
 %% ===================================================================
 %% Internal
 %% ===================================================================
@@ -65,6 +91,30 @@ request_backend(CustomerId, UserId, Interface, Password) ->
     case rmql_rpc_client:call(?MODULE, Payload, <<"AuthReqV1">>) of
         {ok, Bin} ->
             case adto:decode(#auth_resp_v1{}, Bin) of
+                {ok, AuthResp} ->
+                    ?log_debug("Got auth response: ~p", [AuthResp]),
+                    {ok, AuthResp};
+                {error, Error} ->
+                    ?log_error("Auth response decode error: ~p", [Error]),
+                    {error, Error}
+            end;
+        {error, timeout} ->
+            ?log_error("Got auth response: timeout", []),
+            {error, timeout}
+    end.
+
+request_backend(Email, Interface) ->
+    ReqId = uuid:unparse(uuid:generate_time()),
+    AuthReq = #auth_req_v2{
+        req_id = ReqId,
+        email = Email,
+        interface = Interface
+    },
+    ?log_debug("Sending auth request: ~p", [AuthReq]),
+    {ok, Payload} = adto:encode(AuthReq),
+    case rmql_rpc_client:call(?MODULE, Payload, <<"AuthReqV2">>) of
+        {ok, Bin} ->
+            case adto:decode(#auth_resp_v2{}, Bin) of
                 {ok, AuthResp} ->
                     ?log_debug("Got auth response: ~p", [AuthResp]),
                     {ok, AuthResp};
