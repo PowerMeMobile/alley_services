@@ -189,22 +189,11 @@ send(route_to_gateways, Req) ->
         {[], _} ->
             {ok, #send_result{result = no_dest_addrs}};
         {GtwId2Addrs, UnroutableToGateways} ->
-            send(check_invalid_recipient_policy, Req#send_req{
+            send(remove_rejected_for_multiple_type, Req#send_req{
                 routable = GtwId2Addrs,
                 rejected = Req#send_req.rejected ++ UnroutableToGateways
             })
     end;
-
-send(check_invalid_recipient_policy, Req)
-        when Req#send_req.invalid_recipient_policy =:= reject_message ->
-    case Req#send_req.rejected of
-        [] ->
-            send(remove_rejected_for_multiple_type, Req);
-        _ ->
-            {ok, #send_result{result = rejected_by_invalid_recipient_policy}}
-    end;
-send(check_invalid_recipient_policy, Req) ->
-    send(remove_rejected_for_multiple_type, Req);
 
 send(remove_rejected_for_multiple_type, Req)
         when Req#send_req.req_type =:= multiple ->

@@ -36,9 +36,7 @@
     rejected      :: [#addr{}],
     req_dto_s     :: [#sms_req_v1{}],
 
-    credit_left   :: float(),
-
-    invalid_recipient_policy = ignore_invalid :: ignore_invalid | reject_message
+    credit_left   :: float()
 }).
 
 -record(send_result, {

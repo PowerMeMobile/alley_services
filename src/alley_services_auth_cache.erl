@@ -9,17 +9,13 @@
     start_link/0,
 
     store/5,
-    store_by_email/3,
 
     fetch/4,
-    fetch_by_email/2,
 
     delete/1,
     delete/2,
     delete/3,
-    delete/4,
-    delete_by_email/1,
-    delete_by_email/2
+    delete/4
 ]).
 
 %% Service API
@@ -44,7 +40,6 @@
 -type user_id()     :: string() | binary().
 -type password()    :: string() | binary().
 -type type()        :: atom().
--type email()       :: binary().
 
 -record(st, {}).
 
@@ -61,26 +56,10 @@ store(CustomerId, UserId, Type, Password, AuthResp) ->
     Key = {CustomerId, UserId, Type, Password},
     gen_server:cast(?MODULE, {store, Key, AuthResp}).
 
--spec store_by_email(email(), type(), tuple()) -> ok.
-store_by_email(Email, Type, AuthResp) ->
-    Key = {Email, Type},
-    gen_server:cast(?MODULE, {store, Key, AuthResp}).
-
 -spec fetch(customer_id(), user_id(), type(), password()) ->
     {ok, tuple()} | not_found.
 fetch(CustomerId, UserId, Type, Password) ->
     Key = {CustomerId, UserId, Type, Password},
-    case dets:lookup(?MODULE, Key) of
-        [] ->
-            not_found;
-        [{Key, Value}] ->
-            {ok, Value}
-    end.
-
--spec fetch_by_email(email(), type()) ->
-    {ok, tuple()} | not_found.
-fetch_by_email(Email, Type) ->
-    Key = {Email, Type},
     case dets:lookup(?MODULE, Key) of
         [] ->
             not_found;
@@ -103,14 +82,6 @@ delete(CustomerId, UserId, Type) ->
 -spec delete(customer_id(), user_id() | '_', type() | '_', password() | '_') -> ok.
 delete(CustomerId, UserId, Type, Password) ->
     gen_server:cast(?MODULE, {delete, {{CustomerId, UserId, Type, Password}, '_'}}).
-
--spec delete_by_email(email()) -> ok.
-delete_by_email(Email) ->
-    delete_by_email(Email, '_').
-
--spec delete_by_email(email(), type() | '_') -> ok.
-delete_by_email(Email, Type) ->
-    gen_server:cast(?MODULE, {delete, {{Email, Type}, '_'}}).
 
 %% ===================================================================
 %% Service API
