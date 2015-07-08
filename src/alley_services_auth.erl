@@ -86,19 +86,20 @@ authenticate_by_msisdn(Msisdn, Interface) ->
 
 request_backend(AuthData, Interface) ->
     ReqId = uuid:unparse(uuid:generate_time()),
-    AuthReq = #auth_req_v2{
+    Req = #auth_req_v2{
         req_id = ReqId,
         auth_data = AuthData,
         interface = Interface
     },
-    ?log_debug("Sending auth request: ~p", [AuthReq]),
-    {ok, Payload} = adto:encode(AuthReq),
-    case rmql_rpc_client:call(?MODULE, Payload, <<"AuthReqV2">>) of
-        {ok, Bin} ->
-            case adto:decode(#auth_resp_v2{}, Bin) of
-                {ok, AuthResp} ->
-                    ?log_debug("Got auth response: ~p", [AuthResp]),
-                    {ok, AuthResp};
+    ?log_debug("Sending auth request: ~p", [Req]),
+    {ok, ReqBin} = adto:encode(Req),
+    {ok, Timeout} = application:get_env(?APP, kelly_auth_rpc_timeout),
+    case rmql_rpc_client:call(?MODULE, <<"AuthReqV2">>, ReqBin, Timeout) of
+        {ok, <<"AuthRespV2">>, RespBin} ->
+            case adto:decode(#auth_resp_v2{}, RespBin) of
+                {ok, Resp} ->
+                    ?log_debug("Got auth response: ~p", [Resp]),
+                    {ok, Resp};
                 {error, Error} ->
                     ?log_error("Auth response decode error: ~p", [Error]),
                     {error, Error}

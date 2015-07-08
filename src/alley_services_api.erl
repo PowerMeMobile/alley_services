@@ -54,10 +54,9 @@ get_coverage(CustomerId) ->
     },
     ?log_debug("Sending coverage request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
-    %% rmql_rpc_client:call should return {ok, CT, Bin}
-    case rmql_rpc_client:call(?MODULE, ReqBin, <<"CoverageReqV1">>) of
-        {ok, RespBin} ->
-            %% <<"CoverageRespV1">>
+    {ok, Timeout} = application:get_env(?APP, kelly_api_rpc_timeout),
+    case rmql_rpc_client:call(?MODULE, <<"CoverageReqV1">>, ReqBin, Timeout) of
+        {ok, <<"CoverageRespV1">>, RespBin} ->
             case adto:decode(#coverage_resp_v1{}, RespBin) of
                 {ok, Resp = #coverage_resp_v1{}} ->
                     ?log_debug("Got coverage response: ~p", [Resp]),
@@ -87,8 +86,9 @@ get_blacklist() ->
     },
     ?log_debug("Sending blacklist request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
-    case rmql_rpc_client:call(?MODULE, ReqBin, <<"BlacklistReqV1">>) of
-        {ok, RespBin} ->
+    {ok, Timeout} = application:get_env(?APP, kelly_api_rpc_timeout),
+    case rmql_rpc_client:call(?MODULE, <<"BlacklistReqV1">>, ReqBin, Timeout) of
+        {ok, <<"BlacklistRespV1">>, RespBin} ->
             case adto:decode(#blacklist_resp_v1{}, RespBin) of
                 {ok, Resp = #blacklist_resp_v1{}} ->
                     ?log_debug("Got blacklist response: ~p", [Resp]),
@@ -118,8 +118,9 @@ get_sms_status(CustomerId, UserId, SmsReqId) ->
     },
     ?log_debug("Sending sms status request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
-    case rmql_rpc_client:call(?MODULE, ReqBin, <<"SmsStatusReqV1">>) of
-        {ok, RespBin} ->
+    {ok, Timeout} = application:get_env(?APP, kelly_api_rpc_timeout),
+    case rmql_rpc_client:call(?MODULE, <<"SmsStatusReqV1">>, ReqBin, Timeout) of
+        {ok, <<"SmsStatusRespV1">>, RespBin} ->
             case adto:decode(#sms_status_resp_v1{}, RespBin) of
                 {ok, Resp = #sms_status_resp_v1{statuses = []}} ->
                     ?log_debug("Got delivery status response: ~p", [Resp]),
@@ -153,8 +154,9 @@ retrieve_incoming(CustomerUuid, UserId, DestAddr, BatchSize) ->
     },
     ?log_debug("Sending retrieve incoming request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
-    case rmql_rpc_client:call(?MODULE, ReqBin, <<"RetrieveIncomingReqV1">>) of
-        {ok, RespBin} ->
+    {ok, Timeout} = application:get_env(?APP, kelly_api_rpc_timeout),
+    case rmql_rpc_client:call(?MODULE, <<"RetrieveIncomingReqV1">>, ReqBin, Timeout) of
+        {ok, <<"RetrieveIncomingRespV1">>, RespBin} ->
             case adto:decode(#retrieve_incoming_resp_v1{}, RespBin) of
                 {ok, Resp = #retrieve_incoming_resp_v1{}} ->
                     ?log_debug("Got retrieve incoming response: ~p", [Resp]),
@@ -179,8 +181,9 @@ request_credit(CustomerId, Credit) ->
     },
     ?log_debug("Sending request credit request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
-    case rmql_rpc_client:call(?MODULE, ReqBin, <<"CreditReqV1">>) of
-        {ok, RespBin} ->
+    {ok, Timeout} = application:get_env(?APP, kelly_api_rpc_timeout),
+    case rmql_rpc_client:call(?MODULE, <<"CreditReqV1">>, ReqBin, Timeout) of
+        {ok, <<"CreditRespV1">>, RespBin} ->
             case adto:decode(#credit_resp_v1{}, RespBin) of
                 {ok, Resp = #credit_resp_v1{}} ->
                     ?log_debug("Got request credit response: ~p", [Resp]),
@@ -221,8 +224,9 @@ subscribe_sms_receipts(
     },
     ?log_debug("Sending subscribe sms receipts request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
-    case rmql_rpc_client:call(?MODULE, ReqBin, <<"SubscribeSmsReceiptsReq">>) of
-        {ok, RespBin} ->
+    {ok, Timeout} = application:get_env(?APP, kelly_api_rpc_timeout),
+    case rmql_rpc_client:call(?MODULE, <<"SubscribeSmsReceiptsReq">>, ReqBin, Timeout) of
+        {ok, <<"SubscribeSmsReceiptsResp">>, RespBin} ->
             case adto:decode(#k1api_subscribe_sms_receipts_response_dto{}, RespBin) of
                 {ok, Resp} ->
                     ?log_debug("Got subscribe sms receipts sms response: ~p", [Resp]),
@@ -249,8 +253,9 @@ unsubscribe_sms_receipts(ReqId, CustomerId, UserId, SubscriptionId) ->
     },
     ?log_debug("Sending unsubscribe sms receipts request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
-    case rmql_rpc_client:call(?MODULE, ReqBin, <<"UnsubscribeSmsReceiptsReq">>) of
-        {ok, RespBin} ->
+    {ok, Timeout} = application:get_env(?APP, kelly_api_rpc_timeout),
+    case rmql_rpc_client:call(?MODULE, <<"UnsubscribeSmsReceiptsReq">>, ReqBin, Timeout) of
+        {ok, <<"UnsubscribeSmsReceiptsResp">>, RespBin} ->
             case adto:decode(#k1api_unsubscribe_sms_receipts_response_dto{}, RespBin) of
                 {ok, Resp} ->
                     ?log_debug("Got unsubscribe sms receipts sms response: ~p", [Resp]),
@@ -305,8 +310,9 @@ subscribe_incoming_sms(
     },
     ?log_debug("Sending subscribe incoming sms request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
-    case rmql_rpc_client:call(?MODULE, ReqBin, <<"SubscribeIncomingSmsReq">>) of
-        {ok, RespBin} ->
+    {ok, Timeout} = application:get_env(?APP, kelly_api_rpc_timeout),
+    case rmql_rpc_client:call(?MODULE, <<"SubscribeIncomingSmsReq">>, ReqBin, Timeout) of
+        {ok, <<"SubscribeIncomingSmsResp">>, RespBin} ->
             case adto:decode(#k1api_subscribe_incoming_sms_response_dto{}, RespBin) of
                 {ok, Resp} ->
                     ?log_debug("Got subscribe incoming sms response: ~p", [Resp]),
@@ -333,8 +339,9 @@ unsubscribe_incoming_sms(ReqId, CustomerId, UserId, SubscriptionId) ->
     },
     ?log_debug("Sending unsubscribe incoming sms request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
-    case rmql_rpc_client:call(?MODULE, ReqBin, <<"UnsubscribeIncomingSmsReq">>) of
-        {ok, RespBin} ->
+    {ok, Timeout} = application:get_env(?APP, kelly_api_rpc_timeout),
+    case rmql_rpc_client:call(?MODULE, <<"UnsubscribeIncomingSmsReq">>, ReqBin, Timeout) of
+        {ok, <<"UnsubscribeIncomingSmsResp">>, RespBin} ->
             case adto:decode(#k1api_unsubscribe_incoming_sms_response_dto{}, RespBin) of
                 {ok, Resp} ->
                     ?log_debug("Got unsubscribe incoming sms response: ~p", [Resp]),
@@ -372,10 +379,9 @@ process_inbox(CustomerUuid, UserId, Operation, MsgIds) ->
     },
     ?log_debug("Sending inbox request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
-    case rmql_rpc_client:call(?MODULE, ReqBin, <<"InboxReqV1">>) of
-        %% rmql_rpc_client:call should return {ok, CT, Bin}
-        {ok, RespBin} ->
-            %% <<"InboxRespV1">>
+    {ok, Timeout} = application:get_env(?APP, kelly_api_rpc_timeout),
+    case rmql_rpc_client:call(?MODULE, <<"InboxReqV1">>, ReqBin, Timeout) of
+        {ok, <<"InboxRespV1">>, RespBin} ->
             case adto:decode(#inbox_resp_v1{}, RespBin) of
                 {ok, Resp} ->
                     ?log_debug("Got inbox response: ~p", [Resp]),
