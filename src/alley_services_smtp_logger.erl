@@ -73,7 +73,7 @@ set_loglevel(LogLevel) when
 get_loglevel() ->
     gen_server:call(?MODULE, get_loglevel).
 
--spec log(inet:ip_address(), binary(), binary(), [binary()], datetime(), binary(), datetime(), binary()) -> ok.
+-spec log(inet:ip_address(), binary(), binary(), binary(), datetime(), binary(), datetime(), binary()) -> ok.
 log(IP, Hostname, From, To, ReqTime, ReqData, RespTime, RespData) ->
     LogTask = #log{
         remote_ip = IP,
