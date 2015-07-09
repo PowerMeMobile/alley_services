@@ -106,7 +106,7 @@ init({CustomerUuid, UserId}) ->
     {ok, LogLevel} = application:get_env(?APP, pdu_log_level),
     {ok, LogSize} = application:get_env(?APP, pdu_log_size),
     ?MODULE:set_loglevel(self(), LogLevel),
-    %% To ingore gproc exceptions and CRASH reports in log files
+    %% To ignore gproc exceptions and CRASH reports in log files
     %% on concurent gproc:add_local_name call
     try gproc:add_local_name({CustomerUuid, UserId}) of
         true ->
