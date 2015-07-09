@@ -253,9 +253,10 @@ fmt_data(LD = #log{}, info) ->
 
 fmt_apache_log(LD = #log{}) ->
     Req = LD#log.req,
+
     %% compose client ip addr
-    {{{IP0,IP1,IP2,IP3}, _Port}, Req} = cowboy_req:peer(Req),
-    ClientIP = io_lib:format("~p.~p.~p.~p",[IP0,IP1,IP2,IP3]),
+    {{IP, _Port}, Req} = cowboy_req:peer(Req),
+    ClientIP = inet:ntoa(IP),
 
     %% compose log time
     ReqTime = {{Y,M,D},{H,Min,S}} = LD#log.req_time,
