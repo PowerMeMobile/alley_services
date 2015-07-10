@@ -32,26 +32,10 @@ authenticate(CustomerId, UserId, Password, Interface) ->
         password = Password
     },
     case request_backend(AuthData, Interface) of
-        {ok, AuthResp = #auth_resp_v2{result = Result}} ->
-            case Result of
-                #auth_customer_v1{} ->
-                    ok = alley_services_auth_cache:store(
-                        CustomerId, UserId, Interface, Password, AuthResp);
-                #auth_error_v2{} ->
-                    ok
-            end,
+        {ok, AuthResp = #auth_resp_v2{}} ->
             {ok, AuthResp};
         {error, timeout} ->
-            ?log_debug("Trying auth cache...", []),
-            case alley_services_auth_cache:fetch(
-                    CustomerId, UserId, Interface, Password) of
-                {ok, AuthResp} ->
-                    ?log_debug("Found auth response: ~p", [AuthResp]),
-                    {ok, AuthResp};
-                not_found ->
-                    ?log_error("Not found auth response.", []),
-                    {error, timeout}
-            end
+            {error, timeout}
     end.
 
 -spec authenticate_by_email(binary(), atom()) ->
