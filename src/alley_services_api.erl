@@ -62,15 +62,16 @@ get_coverage(CustomerId) ->
                     ?log_debug("Got coverage response: ~p", [Resp]),
                     {ok, Resp};
                 {error, Error} ->
-                    %% <<"ErrorRespV1">>
-                    case adto:decode(#error_resp_v1{}, RespBin) of
-                        {ok, #error_resp_v1{error = RespError}} ->
-                            ?log_error("Got coverage error: ~p", [RespError]),
-                            {error, RespError};
-                        {error, Error2} ->
-                            ?log_error("Coverage response decode error: ~p, ~p", [Error, Error2]),
-                            {error, Error}
-                    end
+                    ?log_error("Coverage response decode error: ~p", [Error])
+            end;
+        {ok, <<"ErrorRespV1">>, RespBin} ->
+            case adto:decode(#error_resp_v1{}, RespBin) of
+                {ok, #error_resp_v1{error = Error}} ->
+                    ?log_error("Got coverage error: ~p", [Error]),
+                    {error, Error};
+                {error, Error} ->
+                    ?log_error("Coverage error response decode error: ~p, ~p", [Error]),
+                    {error, Error}
             end;
         {error, timeout} ->
             ?log_debug("Got coverage response: timeout", []),
