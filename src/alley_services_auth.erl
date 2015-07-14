@@ -85,10 +85,10 @@ request_backend(AuthData, Interface) ->
                     ?log_debug("Got auth response: ~p", [Resp]),
                     {ok, Resp};
                 {error, Error} ->
-                    ?log_error("Auth response decode error: ~p", [Error]),
+                    ?log_debug("Auth response decode error: ~p", [Error]),
                     {error, Error}
             end;
         {error, timeout} ->
-            ?log_error("Got auth response: timeout", []),
+            ?log_debug("Got auth response: timeout", []),
             {error, timeout}
     end.
