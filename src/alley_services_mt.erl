@@ -279,6 +279,7 @@ send(publish_dto_s, Req) ->
     {ok, #send_result{
         result = ok,
         req_id = ReqId,
+        req_time = Req#send_req.req_time,
         rejected = Req#send_req.rejected,
         customer = Req#send_req.customer,
         credit_left = Req#send_req.credit_left

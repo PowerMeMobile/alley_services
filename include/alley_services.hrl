@@ -42,6 +42,7 @@
 -record(send_result, {
     result      :: atom(),
     req_id      :: binary(),
+    req_time    :: utc_timestamp(),
     rejected    :: [#addr{}],
     customer    :: customer(),
     credit_left :: float()
