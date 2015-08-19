@@ -241,7 +241,7 @@ send(build_req_dto_s, Req) ->
         {GtwId, AddrNetIdPrices} <- Destinations
     ]),
     ok = alley_services_id_generator:deinit(ReqId),
-    send(publish_dto_s, Req#send_req{req_dto_s = ReqDTOs});
+    send(publish_dto_s, Req2#send_req{req_dto_s = ReqDTOs});
 
 send(publish_dto_s, Req) ->
     DefTime = Req#send_req.def_time,
