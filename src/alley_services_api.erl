@@ -367,7 +367,8 @@ process_inbox(_CustomerUuid, _UserId, Oper, _MsgIds)
     when Oper =/= get_info,
          Oper =/= list_all, Oper =/= list_new,
          Oper =/= fetch_all, Oper =/= fetch_new, Oper =/= fetch_id,
-         Oper =/= delete_all, Oper =/= delete_read, Oper =/= delete_id ->
+         Oper =/= delete_all, Oper =/= delete_read, Oper =/= delete_id,
+         Oper =/= mark_as_read_id, Oper =/= mark_as_unread_id ->
     {error, bad_operation};
 process_inbox(CustomerUuid, UserId, Operation, MsgIds) ->
     ReqId = uuid:unparse(uuid:generate_time()),
