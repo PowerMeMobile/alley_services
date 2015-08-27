@@ -226,6 +226,7 @@ test_start() ->
     Pid.
 
 test_stop(Pid) ->
+    meck:unload(alley_services_api),
     ok = application:stop(meck),
     exit(Pid, normal).
 
