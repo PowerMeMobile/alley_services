@@ -226,6 +226,7 @@ test_start() ->
     Pid.
 
 test_stop(Pid) ->
+    meck:unload(alley_services_api),
     exit(Pid, normal).
 
 test_update(_Pid) ->
