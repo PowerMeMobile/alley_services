@@ -226,7 +226,6 @@ test_start() ->
     Pid.
 
 test_stop(Pid) ->
-    ok = application:stop(meck),
     exit(Pid, normal).
 
 test_update(_Pid) ->
