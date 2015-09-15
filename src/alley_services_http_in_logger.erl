@@ -254,10 +254,6 @@ fmt_data(LD = #log{}, info) ->
 fmt_apache_log(LD = #log{}) ->
     Req = LD#log.req,
 
-    %% compose client ip addr
-    {{IP, _Port}, Req} = cowboy_req:peer(Req),
-    ClientIP = inet:ntoa(IP),
-
     %% compose log time
     ReqTime = {{Y,M,D},{H,Min,S}} = LD#log.req_time,
     RespTime = LD#log.resp_time,
@@ -271,6 +267,7 @@ fmt_apache_log(LD = #log{}) ->
     RespSize = size(LD#log.resp_body),
 
     %% compose ReqLine
+    {Host, Req} = cowboy_req:host(Req),
     {Method, Req} = cowboy_req:method(Req),
     {HttpVer, Req} = cowboy_req:version(Req),
     {Path, Req} = cowboy_req:path(Req),
@@ -286,4 +283,4 @@ fmt_apache_log(LD = #log{}) ->
 
     %% final apache like log line
     io_lib:format("~s - - [~s] \"~s\" ~p ~p ~p \"~s\" *~p* ~n",
-        [ClientIP, LogReqTime, ReqLine, LD#log.resp_code, RespSize, "-", UserAgent, ProcessTime]).
+        [Host, LogReqTime, ReqLine, LD#log.resp_code, RespSize, "-", UserAgent, ProcessTime]).
