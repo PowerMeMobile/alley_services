@@ -103,17 +103,17 @@ get_blacklist() ->
             {error, timeout}
     end.
 
--spec get_sms_status(customer_id(), user_id(), request_id()) ->
+-spec get_sms_status(customer_uuid(), user_id(), request_id()) ->
     {ok, [#sms_status_resp_v1{}]} | {error, term()}.
-get_sms_status(_CustomerId, _UserId, undefined) ->
+get_sms_status(_CustomerUuid, _UserId, undefined) ->
     {error, empty_request_id};
-get_sms_status(_CustomerId, _UserId, <<"">>) ->
+get_sms_status(_CustomerUuid, _UserId, <<"">>) ->
     {error, empty_request_id};
-get_sms_status(CustomerId, UserId, SmsReqId) ->
+get_sms_status(CustomerUuid, UserId, SmsReqId) ->
     ReqId = uuid:unparse(uuid:generate_time()),
     Req = #sms_status_req_v1{
         req_id = ReqId,
-        customer_id = CustomerId,
+        customer_uuid = CustomerUuid,
         user_id = UserId,
         sms_req_id = SmsReqId
     },
@@ -201,23 +201,23 @@ request_credit(CustomerId, Credit) ->
     end.
 
 -spec subscribe_sms_receipts(
-    request_id(), customer_id(), user_id(),
+    request_id(), customer_uuid(), user_id(),
     binary(), src_addr(), binary()
 ) ->
     {#sub_sms_receipts_resp_v1{}} | {error, term()}.
-subscribe_sms_receipts(_ReqId, _CustomerId, _UserId,
+subscribe_sms_receipts(_ReqId, _CustomerUuid, _UserId,
     undefined, _SrcAddr, _CallbackData) ->
     {error, empty_notify_url};
-subscribe_sms_receipts(_ReqId, _CustomerId, _UserId,
+subscribe_sms_receipts(_ReqId, _CustomerUuid, _UserId,
     <<>>, _SrcAddr, _CallbackData) ->
     {error, empty_notify_url};
 subscribe_sms_receipts(
-    ReqId, CustomerId, UserId,
+    ReqId, CustomerUuid, UserId,
     NotifyUrl, SrcAddr, CallbackData
 ) ->
     Req = #sub_sms_receipts_req_v1{
         req_id = ReqId,
-        customer_id = CustomerId,
+        customer_uuid = CustomerUuid,
         user_id = UserId,
         url = NotifyUrl,
         dest_addr = SrcAddr, %% Must be SrcAddr
@@ -242,13 +242,13 @@ subscribe_sms_receipts(
     end.
 
 -spec unsubscribe_sms_receipts(
-    request_id(), customer_id(), user_id(), subscription_id()
+    request_id(), customer_uuid(), user_id(), subscription_id()
 ) ->
     {ok, #unsub_sms_receipts_resp_v1{}} | {error, term()}.
-unsubscribe_sms_receipts(ReqId, CustomerId, UserId, SubscriptionId) ->
+unsubscribe_sms_receipts(ReqId, CustomerUuid, UserId, SubscriptionId) ->
     Req = #unsub_sms_receipts_req_v1{
         req_id = ReqId,
-        customer_id = CustomerId,
+        customer_uuid = CustomerUuid,
         user_id = UserId,
         subscription_id = SubscriptionId
     },
@@ -271,37 +271,37 @@ unsubscribe_sms_receipts(ReqId, CustomerId, UserId, SubscriptionId) ->
     end.
 
 -spec subscribe_incoming_sms(
-    request_id(), customer_id(), user_id(), dst_addr(),
+    request_id(), customer_uuid(), user_id(), dst_addr(),
     binary(), binary(), binary(), binary()
 ) ->
     {ok, #sub_incoming_sms_resp_v1{}} | {error, term()}.
 subscribe_incoming_sms(
-    _ReqId, _CustomerId, _UserId, undefined,
+    _ReqId, _CustomerUuid, _UserId, undefined,
     _notifyURL, _Criteria, _Correlator, _CallbackData
 ) ->
     {error, empty_dest_addr};
 subscribe_incoming_sms(
-    _ReqId, _CustomerId, _UserId, #addr{addr = <<>>},
+    _ReqId, _CustomerUuid, _UserId, #addr{addr = <<>>},
     _notifyURL, _Criteria, _Correlator, _CallbackData
 ) ->
     {error, empty_dest_addr};
 subscribe_incoming_sms(
-    _ReqId, _CustomerId, _UserId, _DestAddr,
+    _ReqId, _CustomerUuid, _UserId, _DestAddr,
     undefined, _Criteria, _Correlator, _CallbackData
 ) ->
     {error, empty_notify_url};
 subscribe_incoming_sms(
-    _ReqId, _CustomerId, _UserId, _DestAddr,
+    _ReqId, _CustomerUuid, _UserId, _DestAddr,
     <<>>, _Criteria, _Correlator, _CallbackData
 ) ->
     {error, empty_notify_url};
 subscribe_incoming_sms(
-    ReqId, CustomerId, UserId, DestAddr,
+    ReqId, CustomerUuid, UserId, DestAddr,
     NotifyUrl, Criteria, Correlator, CallbackData
 ) ->
     Req = #sub_incoming_sms_req_v1{
         req_id = ReqId,
-        customer_id = CustomerId,
+        customer_uuid = CustomerUuid,
         user_id = UserId,
         dest_addr = DestAddr,
         notify_url = NotifyUrl,
@@ -328,13 +328,13 @@ subscribe_incoming_sms(
     end.
 
 -spec unsubscribe_incoming_sms(
-    request_id(), customer_id(), user_id(), subscription_id()
+    request_id(), customer_uuid(), user_id(), subscription_id()
 ) ->
     {ok, #unsub_incoming_sms_resp_v1{}} | {error, term()}.
-unsubscribe_incoming_sms(ReqId, CustomerId, UserId, SubscriptionId) ->
+unsubscribe_incoming_sms(ReqId, CustomerUuid, UserId, SubscriptionId) ->
     Req = #unsub_incoming_sms_req_v1{
         req_id = ReqId,
-        customer_id = CustomerId,
+        customer_uuid = CustomerUuid,
         user_id = UserId,
         subscription_id = SubscriptionId
     },
