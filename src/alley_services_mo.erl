@@ -121,7 +121,7 @@ process(deliver, Req) ->
     DTO = Req#req.dto,
     ?log_info("Got InboundSms: ~p", [DTO]),
     #incoming_sms_notification_v1{
-        dest_addr = DestAddr,
+        dst_addr = DestAddr,
         message = Message,
         sender_addr = SenderAddr,
         notify_url  = Url

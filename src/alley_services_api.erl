@@ -220,7 +220,7 @@ subscribe_sms_receipts(
         customer_uuid = CustomerUuid,
         user_id = UserId,
         url = NotifyUrl,
-        dest_addr = SrcAddr, %% Must be SrcAddr
+        src_addr = SrcAddr,
         callback_data = CallbackData
     },
     ?log_debug("Sending subscribe sms receipts request: ~p", [Req]),
@@ -303,7 +303,7 @@ subscribe_incoming_sms(
         req_id = ReqId,
         customer_uuid = CustomerUuid,
         user_id = UserId,
-        dest_addr = DestAddr,
+        dst_addr = DestAddr,
         notify_url = NotifyUrl,
         criteria = Criteria,
         correlator = Correlator,
