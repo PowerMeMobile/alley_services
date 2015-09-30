@@ -245,12 +245,12 @@ subscribe_sms_receipts(
     request_id(), customer_uuid(), user_id(), subscription_id()
 ) ->
     {ok, #unsub_sms_receipts_resp_v1{}} | {error, term()}.
-unsubscribe_sms_receipts(ReqId, CustomerUuid, UserId, SubscriptionId) ->
+unsubscribe_sms_receipts(ReqId, CustomerUuid, UserId, SubId) ->
     Req = #unsub_sms_receipts_req_v1{
         req_id = ReqId,
         customer_uuid = CustomerUuid,
         user_id = UserId,
-        subscription_id = SubscriptionId
+        sub_id = SubId
     },
     ?log_debug("Sending unsubscribe sms receipts request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
@@ -331,12 +331,12 @@ subscribe_incoming_sms(
     request_id(), customer_uuid(), user_id(), subscription_id()
 ) ->
     {ok, #unsub_incoming_sms_resp_v1{}} | {error, term()}.
-unsubscribe_incoming_sms(ReqId, CustomerUuid, UserId, SubscriptionId) ->
+unsubscribe_incoming_sms(ReqId, CustomerUuid, UserId, SubId) ->
     Req = #unsub_incoming_sms_req_v1{
         req_id = ReqId,
         customer_uuid = CustomerUuid,
         user_id = UserId,
-        subscription_id = SubscriptionId
+        sub_id = SubId
     },
     ?log_debug("Sending unsubscribe incoming sms request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
