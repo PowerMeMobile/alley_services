@@ -37,7 +37,7 @@
     reply_to :: binary(),
     message_id :: binary(),
     ct :: binary(),
-    dto :: #k1api_sms_notification_request_dto{}
+    dto :: #incoming_sms_notification_v1{}
 }).
 
 %% ===================================================================
@@ -108,7 +108,7 @@ code_change(_OldVsn, State, _Extra) ->
 %% ===================================================================
 
 process(decode, Req = #req{ct = <<"OutgoingBatch">>}) ->
-    case adto:decode(#k1api_sms_notification_request_dto{}, Req#req.payload) of
+    case adto:decode(#incoming_sms_notification_v1{}, Req#req.payload) of
         {ok, DTO} ->
             process(deliver, Req#req{dto = DTO});
         Error ->
@@ -120,7 +120,7 @@ process(decode, Req) ->
 process(deliver, Req) ->
     DTO = Req#req.dto,
     ?log_info("Got InboundSms: ~p", [DTO]),
-    #k1api_sms_notification_request_dto{
+    #incoming_sms_notification_v1{
         dest_addr = DestAddr,
         message = Message,
         sender_addr = SenderAddr,
@@ -163,7 +163,7 @@ process(deliver, Req) ->
 process(ack, Req) ->
     ?log_info("ack", []),
     ReqDTO = Req#req.dto,
-    ReqMsgID = ReqDTO#k1api_sms_notification_request_dto.message_id,
+    ReqMsgID = ReqDTO#incoming_sms_notification_v1.message_id,
     DTO = #funnel_ack_dto{id = ReqMsgID},
     {ok, Encoded} = adto:encode(DTO),
     Props = [

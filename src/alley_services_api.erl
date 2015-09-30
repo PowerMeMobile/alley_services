@@ -204,7 +204,7 @@ request_credit(CustomerId, Credit) ->
     request_id(), customer_id(), user_id(),
     binary(), src_addr(), binary()
 ) ->
-    {#k1api_subscribe_sms_receipts_response_dto{}} | {error, term()}.
+    {#sub_sms_receipts_resp_v1{}} | {error, term()}.
 subscribe_sms_receipts(_ReqId, _CustomerId, _UserId,
     undefined, _SrcAddr, _CallbackData) ->
     {error, empty_notify_url};
@@ -215,8 +215,8 @@ subscribe_sms_receipts(
     ReqId, CustomerId, UserId,
     NotifyUrl, SrcAddr, CallbackData
 ) ->
-    Req = #k1api_subscribe_sms_receipts_request_dto{
-        id = ReqId,
+    Req = #sub_sms_receipts_req_v1{
+        req_id = ReqId,
         customer_id = CustomerId,
         user_id = UserId,
         url = NotifyUrl,
@@ -226,11 +226,11 @@ subscribe_sms_receipts(
     ?log_debug("Sending subscribe sms receipts request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
     {ok, Timeout} = application:get_env(?APP, kelly_api_rpc_timeout),
-    case rmql_rpc_client:call(?MODULE, <<"SubscribeSmsReceiptsReq">>, ReqBin, Timeout) of
-        {ok, <<"SubscribeSmsReceiptsResp">>, RespBin} ->
-            case adto:decode(#k1api_subscribe_sms_receipts_response_dto{}, RespBin) of
+    case rmql_rpc_client:call(?MODULE, <<"SubSmsReceiptsReqV1">>, ReqBin, Timeout) of
+        {ok, <<"SubSmsReceiptsRespV1">>, RespBin} ->
+            case adto:decode(#sub_sms_receipts_resp_v1{}, RespBin) of
                 {ok, Resp} ->
-                    ?log_debug("Got subscribe sms receipts sms response: ~p", [Resp]),
+                    ?log_debug("Got subscribe sms receipts response: ~p", [Resp]),
                     {ok, Resp};
                 {error, Error} ->
                     ?log_error("Subscribe sms receipts response decode error: ~p", [Error]),
@@ -244,10 +244,10 @@ subscribe_sms_receipts(
 -spec unsubscribe_sms_receipts(
     request_id(), customer_id(), user_id(), subscription_id()
 ) ->
-    {ok, #k1api_unsubscribe_sms_receipts_response_dto{}} | {error, term()}.
+    {ok, #unsub_sms_receipts_resp_v1{}} | {error, term()}.
 unsubscribe_sms_receipts(ReqId, CustomerId, UserId, SubscriptionId) ->
-    Req = #k1api_unsubscribe_sms_receipts_request_dto{
-        id = ReqId,
+    Req = #unsub_sms_receipts_req_v1{
+        req_id = ReqId,
         customer_id = CustomerId,
         user_id = UserId,
         subscription_id = SubscriptionId
@@ -255,11 +255,11 @@ unsubscribe_sms_receipts(ReqId, CustomerId, UserId, SubscriptionId) ->
     ?log_debug("Sending unsubscribe sms receipts request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
     {ok, Timeout} = application:get_env(?APP, kelly_api_rpc_timeout),
-    case rmql_rpc_client:call(?MODULE, <<"UnsubscribeSmsReceiptsReq">>, ReqBin, Timeout) of
-        {ok, <<"UnsubscribeSmsReceiptsResp">>, RespBin} ->
-            case adto:decode(#k1api_unsubscribe_sms_receipts_response_dto{}, RespBin) of
+    case rmql_rpc_client:call(?MODULE, <<"UnsubSmsReceiptsReqV1">>, ReqBin, Timeout) of
+        {ok, <<"UnsubSmsReceiptsRespV1">>, RespBin} ->
+            case adto:decode(#unsub_sms_receipts_resp_v1{}, RespBin) of
                 {ok, Resp} ->
-                    ?log_debug("Got unsubscribe sms receipts sms response: ~p", [Resp]),
+                    ?log_debug("Got unsubscribe sms receipts response: ~p", [Resp]),
                     {ok, Resp};
                 {error, Error} ->
                     ?log_error("Unsubscribe sms receipts response decode error: ~p", [Error]),
@@ -274,7 +274,7 @@ unsubscribe_sms_receipts(ReqId, CustomerId, UserId, SubscriptionId) ->
     request_id(), customer_id(), user_id(), dst_addr(),
     binary(), binary(), binary(), binary()
 ) ->
-    {ok, #k1api_subscribe_incoming_sms_response_dto{}} | {error, term()}.
+    {ok, #sub_incoming_sms_resp_v1{}} | {error, term()}.
 subscribe_incoming_sms(
     _ReqId, _CustomerId, _UserId, undefined,
     _notifyURL, _Criteria, _Correlator, _CallbackData
@@ -299,8 +299,8 @@ subscribe_incoming_sms(
     ReqId, CustomerId, UserId, DestAddr,
     NotifyUrl, Criteria, Correlator, CallbackData
 ) ->
-    Req = #k1api_subscribe_incoming_sms_request_dto{
-        id = ReqId,
+    Req = #sub_incoming_sms_req_v1{
+        req_id = ReqId,
         customer_id = CustomerId,
         user_id = UserId,
         dest_addr = DestAddr,
@@ -312,9 +312,9 @@ subscribe_incoming_sms(
     ?log_debug("Sending subscribe incoming sms request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
     {ok, Timeout} = application:get_env(?APP, kelly_api_rpc_timeout),
-    case rmql_rpc_client:call(?MODULE, <<"SubscribeIncomingSmsReq">>, ReqBin, Timeout) of
-        {ok, <<"SubscribeIncomingSmsResp">>, RespBin} ->
-            case adto:decode(#k1api_subscribe_incoming_sms_response_dto{}, RespBin) of
+    case rmql_rpc_client:call(?MODULE, <<"SubIncomingSmsReqV1">>, ReqBin, Timeout) of
+        {ok, <<"SubIncomingSmsRespV1">>, RespBin} ->
+            case adto:decode(#sub_incoming_sms_resp_v1{}, RespBin) of
                 {ok, Resp} ->
                     ?log_debug("Got subscribe incoming sms response: ~p", [Resp]),
                     {ok, Resp};
@@ -330,10 +330,10 @@ subscribe_incoming_sms(
 -spec unsubscribe_incoming_sms(
     request_id(), customer_id(), user_id(), subscription_id()
 ) ->
-    {ok, #k1api_unsubscribe_incoming_sms_response_dto{}} | {error, term()}.
+    {ok, #unsub_incoming_sms_resp_v1{}} | {error, term()}.
 unsubscribe_incoming_sms(ReqId, CustomerId, UserId, SubscriptionId) ->
-    Req = #k1api_unsubscribe_incoming_sms_request_dto{
-        id = ReqId,
+    Req = #unsub_incoming_sms_req_v1{
+        req_id = ReqId,
         customer_id = CustomerId,
         user_id = UserId,
         subscription_id = SubscriptionId
@@ -341,9 +341,9 @@ unsubscribe_incoming_sms(ReqId, CustomerId, UserId, SubscriptionId) ->
     ?log_debug("Sending unsubscribe incoming sms request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
     {ok, Timeout} = application:get_env(?APP, kelly_api_rpc_timeout),
-    case rmql_rpc_client:call(?MODULE, <<"UnsubscribeIncomingSmsReq">>, ReqBin, Timeout) of
-        {ok, <<"UnsubscribeIncomingSmsResp">>, RespBin} ->
-            case adto:decode(#k1api_unsubscribe_incoming_sms_response_dto{}, RespBin) of
+    case rmql_rpc_client:call(?MODULE, <<"UnsubIncomingSmsReqV1">>, ReqBin, Timeout) of
+        {ok, <<"UnsubIncomingSmsRespV1">>, RespBin} ->
+            case adto:decode(#unsub_incoming_sms_resp_v1{}, RespBin) of
                 {ok, Resp} ->
                     ?log_debug("Got unsubscribe incoming sms response: ~p", [Resp]),
                     {ok, Resp};
