@@ -24,7 +24,7 @@ start_link() ->
     rmql_rpc_client:start_link(?MODULE, QueueName).
 
 -spec authenticate(binary(), binary(), binary(), atom()) ->
-    {ok, #auth_resp_v2{}} | {error, timeout}.
+    {ok, #auth_resp_v3{}} | {error, timeout}.
 authenticate(CustomerId, UserId, Password, Interface) ->
     AuthData = #auth_credentials{
         customer_id = CustomerId,
@@ -32,33 +32,33 @@ authenticate(CustomerId, UserId, Password, Interface) ->
         password = Password
     },
     case request_backend(AuthData, Interface) of
-        {ok, AuthResp = #auth_resp_v2{}} ->
+        {ok, AuthResp = #auth_resp_v3{}} ->
             {ok, AuthResp};
         {error, timeout} ->
             {error, timeout}
     end.
 
 -spec authenticate_by_email(binary(), atom()) ->
-    {ok, #auth_resp_v2{}} | {error, timeout}.
+    {ok, #auth_resp_v3{}} | {error, timeout}.
 authenticate_by_email(Email, Interface) ->
     AuthData = #auth_email{
         email = Email
     },
     case request_backend(AuthData, Interface) of
-        {ok, AuthResp = #auth_resp_v2{}} ->
+        {ok, AuthResp = #auth_resp_v3{}} ->
             {ok, AuthResp};
         {error, timeout} ->
             {error, timeout}
     end.
 
 -spec authenticate_by_msisdn(#addr{}, atom()) ->
-    {ok, #auth_resp_v2{}} | {error, timeout}.
+    {ok, #auth_resp_v3{}} | {error, timeout}.
 authenticate_by_msisdn(Msisdn, Interface) ->
     AuthData = #auth_msisdn{
         msisdn = Msisdn
     },
     case request_backend(AuthData, Interface) of
-        {ok, AuthResp = #auth_resp_v2{}} ->
+        {ok, AuthResp = #auth_resp_v3{}} ->
             {ok, AuthResp};
         {error, timeout} ->
             {error, timeout}
@@ -70,7 +70,7 @@ authenticate_by_msisdn(Msisdn, Interface) ->
 
 request_backend(AuthData, Interface) ->
     ReqId = uuid:unparse(uuid:generate_time()),
-    Req = #auth_req_v2{
+    Req = #auth_req_v3{
         req_id = ReqId,
         auth_data = AuthData,
         interface = Interface
@@ -78,9 +78,9 @@ request_backend(AuthData, Interface) ->
     ?log_debug("Sending auth request: ~p", [Req]),
     {ok, ReqBin} = adto:encode(Req),
     {ok, Timeout} = application:get_env(?APP, kelly_auth_rpc_timeout),
-    case rmql_rpc_client:call(?MODULE, <<"AuthReqV2">>, ReqBin, Timeout) of
-        {ok, <<"AuthRespV2">>, RespBin} ->
-            case adto:decode(#auth_resp_v2{}, RespBin) of
+    case rmql_rpc_client:call(?MODULE, <<"AuthReqV3">>, ReqBin, Timeout) of
+        {ok, <<"AuthRespV3">>, RespBin} ->
+            case adto:decode(#auth_resp_v3{}, RespBin) of
                 {ok, Resp} ->
                     ?log_debug("Got auth response: ~p", [Resp]),
                     {ok, Resp};

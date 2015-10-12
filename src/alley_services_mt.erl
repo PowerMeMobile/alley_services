@@ -128,18 +128,17 @@ send(check_interface, Req) ->
 
 send(fill_coverage_tab, Req) ->
     Customer = Req#send_req.customer,
-    Networks = Customer#auth_customer_v2.networks,
-    Providers = Customer#auth_customer_v2.providers,
-    DefProvId = Customer#auth_customer_v2.default_provider_id,
+    Networks = Customer#auth_customer_v3.networks,
+    Providers = Customer#auth_customer_v3.providers,
     CoverageTab = ets:new(coverage_tab, [private]),
     alley_services_coverage:fill_coverage_tab(
-        Networks, Providers, DefProvId, CoverageTab),
+        Networks, Providers, CoverageTab),
     send(check_originator, Req#send_req{coverage_tab = CoverageTab});
 
 send(check_originator, Req) ->
     Customer = Req#send_req.customer,
     Originator = Req#send_req.originator,
-    AllowedSources = Customer#auth_customer_v2.allowed_sources,
+    AllowedSources = Customer#auth_customer_v3.allowed_sources,
     case lists:member(Originator, AllowedSources) of
         true ->
             send(check_recipients, Req);
@@ -184,7 +183,7 @@ send(route_to_providers, Req) ->
 send(route_to_gateways, Req) ->
     ProvId2Addrs = Req#send_req.routable,
     Customer = Req#send_req.customer,
-    Providers = Customer#auth_customer_v2.providers,
+    Providers = Customer#auth_customer_v3.providers,
     case alley_services_coverage:route_addrs_to_gateways(ProvId2Addrs, Providers) of
         {[], _} ->
             {ok, #send_result{result = no_dest_addrs}};

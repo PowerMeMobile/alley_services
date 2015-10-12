@@ -10,13 +10,13 @@
 -endif.
 
 -export([
-    fill_coverage_tab/4,
+    fill_coverage_tab/3,
     fill_network_type_tab/2,
     which_network/2,
     which_network_type/2,
     route_addrs_to_providers/2,
     route_addrs_to_gateways/2,
-    map_network_id_to_price/3,
+    network_id_to_price/2,
     map_addrs_to_networks_and_prices/2,
     calc_sending_price/2
 ]).
@@ -40,11 +40,11 @@
 %% ===================================================================
 
 -spec fill_coverage_tab(
-    [#network_v1{}], [#provider_v1{}], provider_id(), ets:tid()
+    [#network_v1{}], [#provider_v1{}], ets:tid()
 ) -> ets:tid().
-fill_coverage_tab(Networks, Providers, DefProvId, Tab) ->
-    FlatNetworks = flatten_networks(Networks, DefProvId),
-    NetId2Price = map_network_id_to_price(Networks, Providers, DefProvId),
+fill_coverage_tab(Networks, Providers, Tab) ->
+    FlatNetworks = flatten_networks(Networks),
+    NetId2Price = network_id_to_price(Networks, Providers),
     lists:foreach(fun({CCnPref, NumLen, NetId, ProvId}) ->
         Price =  proplists:get_value(NetId, NetId2Price),
         ets:insert(Tab, {CCnPref, NumLen, NetId, ProvId, Price})
@@ -115,18 +115,12 @@ route_addrs_to_providers(Addrs, CoverageTab) ->
 route_addrs_to_gateways(ProvIdAddrs, Providers) ->
     route_addrs_to_gateways(ProvIdAddrs, Providers, [], []).
 
--spec map_network_id_to_price([#network_v1{}], [#provider_v1{}], provider_id()) ->
+-spec network_id_to_price([#network_v1{}], [#provider_v1{}]) ->
     [{network_id(), price()}].
-map_network_id_to_price(Networks, Providers, DefProvId) ->
-    {Networks2, Providers2} =
-        case DefProvId of
-            undefined ->
-                {Networks, Providers};
-            DefProvId ->
-                {[N#network_v1{provider_id = DefProvId} || N <- Networks],
-                 [P || P <- Providers, P#provider_v1.id =:= DefProvId]}
-        end,
-    network_id_to_price(Networks2, Providers2).
+network_id_to_price(Networks, Providers) ->
+    ProvId2AddPoints =
+        [{P#provider_v1.id, P#provider_v1.sms_add_points} || P <- Providers],
+    [{N#network_v1.id, calc_sms_price(N, ProvId2AddPoints)} || N <- Networks].
 
 -spec map_addrs_to_networks_and_prices([#addr{}], ets:tab()) ->
     {[{#addr{}, network_id(), price()}], [#addr{}]}.
@@ -149,24 +143,16 @@ calc_sending_price(Addr2NetIdAndPrice, NumOfMsgs) ->
 prefixes(Number, PrefixLens) ->
     [binary:part(Number, {0, L}) || L <- PrefixLens, L =< size(Number)].
 
-flatten_networks(Networks, DefProvId) ->
-    lists:flatmap(fun(Network) ->
-        make_coverage_tuple(Network, DefProvId)
-    end, Networks).
+flatten_networks(Networks) ->
+    lists:flatmap(fun make_coverage_tuple/1, Networks).
 
-make_coverage_tuple(Network, undefined) ->
+make_coverage_tuple(Network) ->
     NetId    = Network#network_v1.id,
     CC       = Network#network_v1.country_code,
     NumLen   = Network#network_v1.number_len,
     Prefixes = Network#network_v1.prefixes,
     ProvId   = Network#network_v1.provider_id,
-    [{<<CC/binary, P/binary>>, NumLen, NetId, ProvId} || P <- Prefixes];
-make_coverage_tuple(Network, DefProvId) ->
-    NetId    = Network#network_v1.id,
-    CC       = Network#network_v1.country_code,
-    NumLen   = Network#network_v1.number_len,
-    Prefixes = Network#network_v1.prefixes,
-    [{<<CC/binary, P/binary>>, NumLen, NetId, DefProvId} || P <- Prefixes].
+    [{<<CC/binary, P/binary>>, NumLen, NetId, ProvId} || P <- Prefixes].
 
 to_international(Addr = #addr{addr = <<"+", Rest/binary>>}, _StripZero, _CountryCode) ->
     Addr#addr{
@@ -267,11 +253,6 @@ map_addrs_to_networks_and_prices([Addr | Rest], CoverageTab, Routable, Unroutabl
             map_addrs_to_networks_and_prices(Rest, CoverageTab, Routable, [Addr | Unroutable])
     end.
 
-network_id_to_price(Networks, Providers) ->
-    ProvId2AddPoints =
-        [{P#provider_v1.id, P#provider_v1.sms_add_points} || P <- Providers],
-    [{N#network_v1.id, calc_sms_price(N, ProvId2AddPoints)} || N <- Networks].
-
 calc_sms_price(Network, ProvId2AddPoints) ->
     SmsPoints = Network#network_v1.sms_points,
     SmsMultPoints = Network#network_v1.sms_mult_points,
@@ -345,24 +326,24 @@ providers() ->
     },
     [Provider1, Provider2, Provider3, Provider4].
 
-fill_coverage(DefProvId) ->
+fill_coverage() ->
     ok = application:set_env(?APP, country_code, <<"999">>),
     ok = application:set_env(?APP, strip_leading_zero, false),
     Networks = networks(),
     Providers = providers(),
     Tab = ets:new(coverage, [ordered_set]),
-    fill_coverage_tab(Networks, Providers, DefProvId, Tab),
+    fill_coverage_tab(Networks, Providers, Tab),
     Tab.
 
 fill_coverage_tab_empty_tab_test() ->
     Tab = ets:new(coverage_tab, []),
-    fill_coverage_tab([], [], undefined, Tab),
+    fill_coverage_tab([], [], Tab),
     ?assertEqual(1, ets:info(Tab, size)),
     ?assertEqual([{prefix_lens, []}], ets:lookup(Tab, prefix_lens)),
     ets:delete(Tab).
 
-fill_coverage_tab_undef_def_prov_id_test() ->
-    Tab = fill_coverage(undefined),
+fill_coverage_tab_test() ->
+    Tab = fill_coverage(),
     Expected = [
         {prefix_lens, [4, 5]},
         {<<"9980">>, 0, <<"NID3">>, <<"PID3">>, 3.0},
@@ -377,23 +358,7 @@ fill_coverage_tab_undef_def_prov_id_test() ->
     ?assertEqual(Expected, Actual),
     ets:delete(Tab).
 
-fill_coverage_tab_def_def_prov_id_test() ->
-    Tab = fill_coverage(<<"PID4">>),
-    Expected = [
-        {prefix_lens, [4, 5]},
-        {<<"9980">>, 0, <<"NID3">>, <<"PID4">>, 3.0},
-        {<<"9981">>, 0, <<"NID3">>, <<"PID4">>, 3.0},
-        {<<"9982">>, 0, <<"NID3">>, <<"PID4">>, 3.0},
-        {<<"99901">>, 12, <<"NID1">>, <<"PID4">>, 1.0},
-        {<<"99902">>, 12, <<"NID1">>, <<"PID4">>, 1.0},
-        {<<"99903">>,  0, <<"NID2">>, <<"PID4">>, 2.0},
-        {<<"99904">>,  0, <<"NID2">>, <<"PID4">>, 2.0}
-    ],
-    Actual = ets:tab2list(Tab),
-    ?assertEqual(Expected, Actual),
-    ets:delete(Tab).
-
-fill_coverage_tab_test() ->
+fill_coverage_tab_2_test() ->
     Networks = [
         #network_v1{
             id = <<"NID1">>,
@@ -416,7 +381,7 @@ fill_coverage_tab_test() ->
     ],
     Providers = providers(),
     Tab = ets:new(coverage_tab, []),
-    fill_coverage_tab(Networks, Providers, undefined, Tab),
+    fill_coverage_tab(Networks, Providers, Tab),
     ?assertEqual(5, ets:info(Tab, size)),
     ?assertEqual([{<<"444296">>, 12, <<"NID1">>, <<"PID1">>, 1.0}],
                  ets:lookup(Tab, <<"444296">>)),
@@ -430,7 +395,7 @@ fill_coverage_tab_test() ->
     ets:delete(Tab).
 
 which_network_international_number_success_test() ->
-    Tab = fill_coverage(undefined),
+    Tab = fill_coverage(),
     Addr = #addr{addr = <<"999020000000">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
     Addr2 = #addr{addr = <<"999020000000">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
     Expected = {<<"NID1">>, Addr2, <<"PID1">>, 1.0},
@@ -439,7 +404,7 @@ which_network_international_number_success_test() ->
     ets:delete(Tab).
 
 which_network_with_zero_number_len_success_test() ->
-    Tab = fill_coverage(undefined),
+    Tab = fill_coverage(),
     Addr = #addr{addr = <<"9990300000">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
     Addr2 = #addr{addr = <<"9990300000">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
     Expected = {<<"NID2">>, Addr2, <<"PID2">>, 2.0},
@@ -448,7 +413,7 @@ which_network_with_zero_number_len_success_test() ->
     ets:delete(Tab).
 
 which_network_failure_test() ->
-    Tab = fill_coverage(undefined),
+    Tab = fill_coverage(),
     Addr = #addr{addr = <<"997010000000">>, ton = ?TON_INTERNATIONAL, npi = ?NPI_ISDN},
     Expected = undefined,
     Actual = which_network(Addr, Tab),
@@ -499,7 +464,7 @@ which_network_test() ->
     ],
     Providers = providers(),
     Tab = ets:new(coverage_tab, []),
-    fill_coverage_tab(Networks, Providers, undefined, Tab),
+    fill_coverage_tab(Networks, Providers, Tab),
     ?assertEqual(undefined,
                  which_network(#addr{addr = <<"44429611347">>, ton = 1, npi = 0}, Tab)),
     ?assertEqual({<<"NID1">>,
@@ -666,7 +631,7 @@ strip_non_digits_test() ->
     ?assertEqual(<<"375296761221">>, strip_non_digits(<<"+375 29 676 1221">>)),
     ?assertEqual(<<"12345678910">>, strip_non_digits(<<"12345678910">>)).
 
-flatten_networks_wo_default_provider_id_test() ->
+flatten_networks_test() ->
     Networks = [
         #network_v1{
             id = <<"b8a55c6d-9ea6-43a8-bf70-b1c34eb4a8fe">>,
@@ -688,31 +653,7 @@ flatten_networks_wo_default_provider_id_test() ->
         {<<"444296">>, 12, <<"b8a55c6d-9ea6-43a8-bf70-b1c34eb4a8fe">>, <<"123">>},
         {<<"5552311">>, 13, <<"d9f043d7-8cb6-4a53-94a8-4789da444f18">>, <<"456">>},
         {<<"5553320">>, 13, <<"d9f043d7-8cb6-4a53-94a8-4789da444f18">>, <<"456">>}
-    ], lists:sort(flatten_networks(Networks, undefined))).
-
-flatten_networks_with_default_provider_id_test() ->
-    Networks = [
-        #network_v1{
-            id = <<"b8a55c6d-9ea6-43a8-bf70-b1c34eb4a8fe">>,
-            country_code = <<"444">>,
-            number_len = 12,
-            prefixes = [<<"296">>, <<"293">>],
-            provider_id = <<"123">>
-        },
-        #network_v1{
-            id = <<"d9f043d7-8cb6-4a53-94a8-4789da444f18">>,
-            country_code = <<"555">>,
-            number_len = 13,
-            prefixes = [<<"2311">>, <<"3320">>],
-            provider_id = <<"456">>
-        }
-    ],
-    ?assertEqual([
-        {<<"444293">>, 12, <<"b8a55c6d-9ea6-43a8-bf70-b1c34eb4a8fe">>, <<"999">>},
-        {<<"444296">>, 12, <<"b8a55c6d-9ea6-43a8-bf70-b1c34eb4a8fe">>, <<"999">>},
-        {<<"5552311">>, 13, <<"d9f043d7-8cb6-4a53-94a8-4789da444f18">>, <<"999">>},
-        {<<"5553320">>, 13, <<"d9f043d7-8cb6-4a53-94a8-4789da444f18">>, <<"999">>}
-    ], lists:sort(flatten_networks(Networks, <<"999">>))).
+    ], lists:sort(flatten_networks(Networks))).
 
 -endif.
 
