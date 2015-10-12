@@ -3,7 +3,7 @@
 
 -include_lib("alley_dto/include/adto.hrl").
 
--type customer()    :: #auth_customer_v1{}.
+-type customer()    :: #auth_customer_v2{}.
 -type provider_id() :: uuid().
 -type gateway_id()  :: uuid().
 
