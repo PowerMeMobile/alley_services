@@ -32,6 +32,8 @@
     def_time      :: undefined | utc_timestamp(),
 
     coverage_tab  :: ets:tid(),
+    providers     :: [#provider_v1{}],
+
     routable      :: [{provider_id() | gateway_id(), [#addr{}]}],
     rejected      :: [#addr{}],
     req_dto_s     :: [#sms_req_v1{}],

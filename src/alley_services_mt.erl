@@ -123,23 +123,14 @@ send(check_interface, Req) ->
         undefined ->
             {ok, #send_result{result = no_interface}};
         _ ->
-            send(fill_coverage_tab, Req)
+            send(check_originator, Req)
     end;
-
-send(fill_coverage_tab, Req) ->
-    Customer = Req#send_req.customer,
-    Networks = Customer#auth_customer_v3.networks,
-    Providers = Customer#auth_customer_v3.providers,
-    CoverageTab = ets:new(coverage_tab, [private]),
-    alley_services_coverage:fill_coverage_tab(
-        Networks, Providers, CoverageTab),
-    send(check_originator, Req#send_req{coverage_tab = CoverageTab});
 
 send(check_originator, Req) ->
     Customer = Req#send_req.customer,
     Originator = Req#send_req.originator,
-    AllowedSources = Customer#auth_customer_v3.allowed_sources,
-    case lists:member(Originator, AllowedSources) of
+    Originators = Customer#auth_customer_v3.originators,
+    case lists:member(Originator, Originators) of
         true ->
             send(check_recipients, Req);
         false ->
@@ -161,11 +152,35 @@ send(check_blacklist, Req) ->
         {[], _} ->
             {ok, #send_result{result = no_dest_addrs}};
         {Allowed, Blacklisted} ->
-            send(route_to_providers, Req#send_req{
+            send(fill_coverage_tab, Req#send_req{
                 recipients = Allowed,
                 rejected = Blacklisted
             })
     end;
+
+send(fill_coverage_tab, Req) ->
+    Customer = Req#send_req.customer,
+    Originator = Req#send_req.originator,
+    Coverages = Customer#auth_customer_v3.coverages,
+
+    {Networks, Providers} =
+        case lists:keyfind(Originator, #auth_coverage_v1.id, Coverages) of
+            #auth_coverage_v1{networks = Ns, providers = Ps} ->
+                {Ns, Ps};
+            false ->
+                #auth_coverage_v1{networks = Ns, providers = Ps} =
+                    lists:keyfind(customer, #auth_coverage_v1.id, Coverages),
+                {Ns, Ps}
+        end,
+
+    CoverageTab = ets:new(coverage_tab, [private]),
+    alley_services_coverage:fill_coverage_tab(
+        Networks, Providers, CoverageTab),
+
+    send(route_to_providers, Req#send_req{
+        coverage_tab = CoverageTab,
+        providers = Providers
+    });
 
 send(route_to_providers, Req) ->
     DestAddrs   = Req#send_req.recipients,
@@ -182,8 +197,7 @@ send(route_to_providers, Req) ->
 
 send(route_to_gateways, Req) ->
     ProvId2Addrs = Req#send_req.routable,
-    Customer = Req#send_req.customer,
-    Providers = Customer#auth_customer_v3.providers,
+    Providers = Req#send_req.providers,
     case alley_services_coverage:route_addrs_to_gateways(ProvId2Addrs, Providers) of
         {[], _} ->
             {ok, #send_result{result = no_dest_addrs}};
@@ -282,7 +296,9 @@ send(publish_dto_s, Req) ->
         rejected = Req#send_req.rejected,
         customer = Req#send_req.customer,
         credit_left = Req#send_req.credit_left
-    }}.
+    }};
+send(Step, _Req) ->
+    error({unknown_send_step, Step}).
 
 %% ===================================================================
 %% Public Confirms
