@@ -9,6 +9,7 @@
     -include_lib("eunit/include/eunit.hrl").
 -endif.
 
+%% API
 -export([
     fill_coverage_tab/3,
     fill_network_type_tab/2,
@@ -17,7 +18,12 @@
     route_addrs_to_providers/2,
     route_addrs_to_gateways/2,
     network_id_to_price/2,
-    map_addrs_to_networks_and_prices/2,
+    calc_sending_price/4
+]).
+
+%% Don't use outside alley_services
+-export([
+    make_coverage_tab/2,
     calc_sending_price/2
 ]).
 
@@ -122,16 +128,48 @@ network_id_to_price(Networks, Providers) ->
         [{P#provider_v1.id, P#provider_v1.sms_add_points} || P <- Providers],
     [{N#network_v1.id, calc_sms_price(N, ProvId2AddPoints)} || N <- Networks].
 
--spec map_addrs_to_networks_and_prices([#addr{}], ets:tab()) ->
-    {[{#addr{}, network_id(), price()}], [#addr{}]}.
-map_addrs_to_networks_and_prices(Addrs, CoverageTab) ->
-    map_addrs_to_networks_and_prices(Addrs, CoverageTab, [], []).
+-spec make_coverage_tab(undefined | #addr{}, [#auth_coverage_v1{}]) ->
+    {ets:tid(), [#provider_v1{}]}.
+make_coverage_tab(Originator, Coverages) ->
+    {Networks, Providers} =
+        case lists:keyfind(Originator, #auth_coverage_v1.id, Coverages) of
+            #auth_coverage_v1{networks = Ns, providers = Ps} ->
+                {Ns, Ps};
+            false ->
+                #auth_coverage_v1{networks = Ns, providers = Ps} =
+                    lists:keyfind(customer, #auth_coverage_v1.id, Coverages),
+                {Ns, Ps}
+        end,
 
--spec calc_sending_price([{#addr{}, network_id(), price()}], pos_integer()) -> price().
+    Tab = ets:new(coverage_tab, [private]),
+    fill_coverage_tab(Networks, Providers, Tab),
+    {Tab, Providers}.
+
+-spec calc_sending_price(
+    undefined | #addr{},
+    [#addr{}],
+    pos_integer(),
+    [#auth_coverage_v1{}]
+) -> price().
+calc_sending_price(Originator, DestAddrs, NumOfMsgs, Coverages) ->
+    {Tab, _Providers} = make_coverage_tab(Originator, Coverages),
+
+    {AddrNetIdPrices, _Unroutable} =
+        map_addrs_to_networks_and_prices(DestAddrs, Tab),
+
+    Price = calc_sending_price(AddrNetIdPrices, NumOfMsgs),
+
+    ets:delete(Tab),
+    Price.
+
+-spec calc_sending_price(
+    [{#addr{}, network_id(), price()}],
+    pos_integer()
+) -> price().
 calc_sending_price(Addr2NetIdAndPrice, NumOfMsgs) ->
     OneMsgPrice = lists:foldl(
         fun({_Addr, _NetId, Price}, Sum) -> Price + Sum end,
-        0,
+        0.0,
         Addr2NetIdAndPrice
     ),
     OneMsgPrice * NumOfMsgs.
@@ -241,6 +279,11 @@ route_addrs_to_gateways([{ProvId, Addrs} | Rest], Providers, Routable, Unroutabl
                     route_addrs_to_gateways(Rest, Providers, [{BulkGtwId, Addrs} | Routable], Unroutable)
             end
     end.
+
+-spec map_addrs_to_networks_and_prices([#addr{}], ets:tab()) ->
+    {[{#addr{}, network_id(), price()}], [#addr{}]}.
+map_addrs_to_networks_and_prices(Addrs, CoverageTab) ->
+    map_addrs_to_networks_and_prices(Addrs, CoverageTab, [], []).
 
 map_addrs_to_networks_and_prices([], _CoverageTab, Routable, Unroutable) ->
     {Routable, Unroutable};

@@ -162,21 +162,8 @@ send(fill_coverage_tab, Req) ->
     Customer = Req#send_req.customer,
     Originator = Req#send_req.originator,
     Coverages = Customer#auth_customer_v3.coverages,
-
-    {Networks, Providers} =
-        case lists:keyfind(Originator, #auth_coverage_v1.id, Coverages) of
-            #auth_coverage_v1{networks = Ns, providers = Ps} ->
-                {Ns, Ps};
-            false ->
-                #auth_coverage_v1{networks = Ns, providers = Ps} =
-                    lists:keyfind(customer, #auth_coverage_v1.id, Coverages),
-                {Ns, Ps}
-        end,
-
-    CoverageTab = ets:new(coverage_tab, [private]),
-    alley_services_coverage:fill_coverage_tab(
-        Networks, Providers, CoverageTab),
-
+    {CoverageTab, Providers} =
+        alley_services_coverage:make_coverage_tab(Originator, Coverages),
     send(route_to_providers, Req#send_req{
         coverage_tab = CoverageTab,
         providers = Providers
