@@ -12,18 +12,14 @@
 %% API
 -export([
     fill_coverage_tab/3,
+    make_coverage_tab/2,
     fill_network_type_tab/2,
     which_network/2,
     which_network_type/2,
     route_addrs_to_providers/2,
     route_addrs_to_gateways/2,
     network_id_to_price/2,
-    calc_sending_price/4
-]).
-
-%% Don't use outside alley_services
--export([
-    make_coverage_tab/2,
+    calc_sending_price/4,
     calc_sending_price/2
 ]).
 
