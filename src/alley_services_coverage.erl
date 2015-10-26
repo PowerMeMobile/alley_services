@@ -310,7 +310,7 @@ networks() ->
     Network1 = #network_v1{
         id = <<"NID1">>,
         country_code = <<"999">>,
-        number_len = 12,
+        number_len = 9,
         prefixes = [<<"01">>, <<"02">>],
         provider_id = <<"PID1">>,
         is_home = false,
@@ -403,7 +403,7 @@ fill_coverage_tab_2_test() ->
         #network_v1{
             id = <<"NID1">>,
             country_code = <<"444">>,
-            number_len = 12,
+            number_len = 9,
             prefixes = [<<"296">>, <<"293">>],
             provider_id = <<"PID1">>,
             sms_points = 1.0,
@@ -412,7 +412,7 @@ fill_coverage_tab_2_test() ->
         #network_v1{
             id = <<"NID2">>,
             country_code = <<"555">>,
-            number_len = 13,
+            number_len = 10,
             prefixes = [<<"2311">>, <<"3320">>],
             provider_id = <<"PID2">>,
             sms_points = 2.0,
@@ -467,7 +467,7 @@ which_network_test() ->
         #network_v1{
             id = <<"NID1">>,
             country_code = <<"444">>,
-            number_len = 12,
+            number_len = 9,
             prefixes = [<<"296">>, <<"293">>],
             provider_id = <<"PID1">>,
             sms_points = 1.0,
@@ -476,7 +476,7 @@ which_network_test() ->
         #network_v1{
             id = <<"NID2">>,
             country_code = <<"555">>,
-            number_len = 13,
+            number_len = 10,
             prefixes = [<<"2311">>, <<"3320">>],
             provider_id = <<"PID2">>,
             sms_points = 2.0,
@@ -485,7 +485,7 @@ which_network_test() ->
         #network_v1{
             id = <<"NID3">>,
             country_code = <<"999">>,
-            number_len = 12,
+            number_len = 9,
             prefixes = [<<"011">>, <<"083">>],
             provider_id = <<"PID1">>,
             sms_points = 3.0,
@@ -495,7 +495,7 @@ which_network_test() ->
             %% full prefix number
             id = <<"NID4">>,
             country_code = <<"241">>,
-            number_len = 11,
+            number_len = 8,
             prefixes = [<<"07290637">>],
             provider_id = <<"PID1">>,
             sms_points = 5.0,
@@ -676,14 +676,14 @@ flatten_networks_test() ->
         #network_v1{
             id = <<"b8a55c6d-9ea6-43a8-bf70-b1c34eb4a8fe">>,
             country_code = <<"444">>,
-            number_len = 12,
+            number_len = 9,
             prefixes = [<<"296">>, <<"293">>],
             provider_id = <<"123">>
         },
         #network_v1{
             id = <<"d9f043d7-8cb6-4a53-94a8-4789da444f18">>,
             country_code = <<"555">>,
-            number_len = 13,
+            number_len = 10,
             prefixes = [<<"2311">>, <<"3320">>],
             provider_id = <<"456">>
         }
