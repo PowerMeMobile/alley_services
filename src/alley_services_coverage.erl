@@ -184,9 +184,10 @@ make_coverage_tuple(Network) ->
     NetId    = Network#network_v1.id,
     CC       = Network#network_v1.country_code,
     NumLen   = Network#network_v1.number_len,
+    NumLen2 = if NumLen =:= 0 -> 0; true -> NumLen + erlang:size(CC) end,
     Prefixes = Network#network_v1.prefixes,
     ProvId   = Network#network_v1.provider_id,
-    [{<<CC/binary, P/binary>>, NumLen, NetId, ProvId} || P <- Prefixes].
+    [{<<CC/binary, P/binary>>, NumLen2, NetId, ProvId} || P <- Prefixes].
 
 to_international(Addr = #addr{addr = <<"+", Rest/binary>>}, _StripZero, _CountryCode) ->
     Addr#addr{
