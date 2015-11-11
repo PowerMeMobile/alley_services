@@ -20,7 +20,8 @@
     route_addrs_to_gateways/2,
     network_id_to_price/2,
     calc_sending_price/4,
-    calc_sending_price/2
+    calc_sending_price/2,
+    strip_non_digits/1
 ]).
 
 -define(TON_UNKNOWN,       0).
@@ -170,6 +171,10 @@ calc_sending_price(Addr2NetIdAndPrice, NumOfMsgs) ->
     ),
     OneMsgPrice * NumOfMsgs.
 
+-spec strip_non_digits(binary()) -> binary().
+strip_non_digits(Number) ->
+    << <<D>> || <<D>> <= Number, D >= $0, D =< $9>>.
+
 %% ===================================================================
 %% Internal
 %% ===================================================================
@@ -221,9 +226,6 @@ to_international(Addr = #addr{addr = Number, ton = ?TON_NATIONAL}, _StripZero, C
     };
 to_international(Addr = #addr{addr = Number}, _StripZero, _CountryCode) ->
     Addr#addr{addr = strip_non_digits(Number)}.
-
-strip_non_digits(Number) ->
-    << <<D>> || <<D>> <= Number, D >= $0, D =< $9>>.
 
 try_match_network(_Number, [], _Tab) ->
     undefined;
