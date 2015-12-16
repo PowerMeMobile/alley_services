@@ -142,6 +142,16 @@ send(check_recipients, Req) ->
         [] ->
             {ok, #send_result{result = no_recipients}};
         [_|_] ->
+            send(check_bypass_blacklist, Req)
+    end;
+
+send(check_bypass_blacklist, Req) ->
+    Customer = Req#send_req.customer,
+    CustomerFeatures = Customer#auth_customer_v3.features,
+    case lists:keyfind(<<"bypass_blacklist">>, #feature_v1.name, CustomerFeatures) of
+        #feature_v1{value = <<"true">>} ->
+            send(fill_coverage_tab, Req#send_req{rejected = []});
+        _ ->
             send(check_blacklist, Req)
     end;
 
