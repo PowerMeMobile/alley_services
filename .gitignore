@@ -1,4 +1,6 @@
-ebin/
+ebin/*.hrl
+ebin/*.beam
+ebin/*.app
 priv/
 deps/
 .eunit
