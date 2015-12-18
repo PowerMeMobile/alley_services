@@ -1,18 +1,19 @@
-{"2.13.0",
+{"2.13.1",
+    %% upgrade
     [{"2.12.0", [
         {load_module, alley_services_mt},
         {load_module, alley_services_coverage}
-    ]}],
-    [{"2.12.0", [
-        {load_module, alley_services_mt},
-        {load_module, alley_services_coverage}
-    ]}]
-}.
-{"2.13.0",
-    [{"2.12.1", [
+    ]},
+    {"2.12.1", [
         {load_module, alley_services_mt}
     ]}],
-    [{"2.12.1", [
+
+    %% downgrade
+    [{"2.12.0", [
+        {load_module, alley_services_mt},
+        {load_module, alley_services_coverage}
+    ]},
+    {"2.12.1", [
         {load_module, alley_services_mt}
     ]}]
 }.
