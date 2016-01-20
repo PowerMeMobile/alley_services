@@ -11,6 +11,15 @@
     publish/1
 ]).
 
+%% export to make release handler create queue on upgrade
+%% 2.13.1 -> 2.14.0
+-ignore_xref([
+    {setup_kelly_sms_request_blacklisted_queue, 0}
+]).
+-export([
+    setup_kelly_sms_request_blacklisted_queue/0
+]).
+
 %% gen_server callbacks
 -export([
     init/1,
@@ -40,8 +49,28 @@
 }).
 
 -type payload() :: binary().
--type publish_action() :: publish | publish_deferred.
 -type req_id() :: binary().
+-type gtw_id() :: uuid().
+
+%% ===================================================================
+%% actions
+%% ===================================================================
+
+-define(PUBLISH_TYPE, publish).
+-define(PUBLISH_BLACKLISTED_TYPE, publish_blacklisted).
+-define(PUBLISH_DEFERRED_TYPE, publish_deferred).
+
+-type publish_type() ::
+    ?PUBLISH_TYPE |
+    ?PUBLISH_BLACKLISTED_TYPE |
+    ?PUBLISH_DEFERRED_TYPE.
+
+-record(publish, {
+    type :: publish_type(),
+    payload :: payload(),
+    req_id :: req_id(),
+    gtw_id :: gtw_id() | undefined
+}).
 
 %% ===================================================================
 %% API
@@ -55,9 +84,31 @@ start_link() ->
 send(Req) ->
     send(check_interface, Req).
 
--spec publish({publish_action(), payload(), req_id(), gateway_id()}) -> ok.
-publish(Req) ->
-    gen_server:call(?MODULE, Req, 60000).
+-spec publish({publish_type(), payload(), req_id(), gateway_id()}) -> ok.
+publish({PublishType, Payload, ReqId, GtwId}) ->
+    PublishReq = #publish{
+        type = PublishType,
+        payload = Payload,
+        req_id = ReqId,
+        gtw_id = GtwId
+    },
+    gen_server:call(?MODULE, PublishReq, 60000).
+
+
+-spec publish_blacklisted(req_id(), [addr()]) -> ok.
+publish_blacklisted(_ReqId, []) -> ok;
+publish_blacklisted(ReqId, BlacklistedRecipients) ->
+    BlacklistedDTO = #blacklisted_v1{
+        req_id = ReqId,
+        numbers = BlacklistedRecipients
+    },
+    {ok, BlacklistedPayload} = adto:encode(BlacklistedDTO),
+    PublishReq = #publish{
+        type = ?PUBLISH_BLACKLISTED_TYPE,
+        payload = BlacklistedPayload,
+        req_id = ReqId
+    },
+    gen_server:call(?MODULE, PublishReq, 60000).
 
 %% ===================================================================
 %% gen_server callbacks
@@ -74,10 +125,16 @@ init([]) ->
             {stop, amqp_unavailable}
     end.
 
-handle_call({Action, Payload, ReqId, GtwId}, From, St = #st{}) ->
-    {Headers, RoutingKey} = headers_and_routing_key(Action, GtwId),
+handle_call(#publish{} = PublishReq, From, St = #st{}) ->
+    #publish{
+        type = PublishType,
+        payload = Payload,
+        req_id = ReqId,
+        gtw_id = GtwId
+    } = PublishReq,
+    {Headers, RoutingKey, ContentType} = headers_and_routing_key(PublishType, GtwId),
     Props = [
-        {content_type, <<"SmsReqV1z">>},
+        {content_type, ContentType},
         {delivery_mode, 2},
         {priority, 1},
         {message_id, ReqId},
@@ -161,7 +218,8 @@ send(check_blacklist, Req) ->
     case alley_services_blacklist:filter(DestAddrs, Originator) of
         {[], _} ->
             {ok, #send_result{result = no_dest_addrs}};
-        {Allowed, Blacklisted} ->
+        {Allowed, Blacklisted0} ->
+            Blacklisted = [{?BLACKLISTED_REJECT_REASON, Recipient} || Recipient <- Blacklisted0],
             send(fill_coverage_tab, Req#send_req{
                 recipients = Allowed,
                 rejected = Blacklisted
@@ -185,7 +243,9 @@ send(route_to_providers, Req) ->
     case alley_services_coverage:route_addrs_to_providers(DestAddrs, CoverageTab) of
         {[], _} ->
             {ok, #send_result{result = no_dest_addrs}};
-        {ProvId2Addrs, UnroutableToProviders} ->
+        {ProvId2Addrs, UnroutableToProviders0} ->
+            UnroutableToProviders =
+                [{?OTHER_REJECT_REASON, Recipient} || Recipient <- UnroutableToProviders0],
             send(route_to_gateways, Req#send_req{
                 routable = ProvId2Addrs,
                 rejected = Req#send_req.rejected ++ UnroutableToProviders
@@ -198,7 +258,9 @@ send(route_to_gateways, Req) ->
     case alley_services_coverage:route_addrs_to_gateways(ProvId2Addrs, Providers) of
         {[], _} ->
             {ok, #send_result{result = no_dest_addrs}};
-        {GtwId2Addrs, UnroutableToGateways} ->
+        {GtwId2Addrs, UnroutableToGateways0} ->
+            UnroutableToGateways =
+                [{?OTHER_REJECT_REASON, Recipient} || Recipient <- UnroutableToGateways0],
             send(remove_rejected_for_multiple_type, Req#send_req{
                 routable = GtwId2Addrs,
                 rejected = Req#send_req.rejected ++ UnroutableToGateways
@@ -207,7 +269,7 @@ send(route_to_gateways, Req) ->
 
 send(remove_rejected_for_multiple_type, Req)
         when Req#send_req.req_type =:= multiple ->
-    Rejected = Req#send_req.rejected,
+    Rejected = [Recipient || {_Reason, Recipient} <- Req#send_req.rejected],
     SizeDict = dict_from_list(Req#send_req.size_map),
     MsgDict = dict_from_list(Req#send_req.message_map),
     SizeDict2 = dict_erase_keys(SizeDict, Rejected),
@@ -277,6 +339,10 @@ send(publish_dto_s, Req) ->
     ReqDTOs = Req#send_req.req_dto_s,
     ReqId = (hd(ReqDTOs))#sms_req_v1.req_id,
 
+    BlacklistedRecipients =
+        [Recipient || {?BLACKLISTED_REJECT_REASON, Recipient} <- Req#send_req.rejected],
+    ok = publish_blacklisted(ReqId, BlacklistedRecipients),
+
     lists:foreach(
         fun(ReqDTO) ->
             ?log_debug("Sending submit request: ~p", [ReqDTO]),
@@ -290,7 +356,7 @@ send(publish_dto_s, Req) ->
         result = ok,
         req_id = ReqId,
         req_time = Req#send_req.req_time,
-        rejected = Req#send_req.rejected,
+        rejected = [Recipient || {_RejectReason, Recipient} <- Req#send_req.rejected],
         customer = Req#send_req.customer,
         credit_left = Req#send_req.credit_left
     }};
@@ -301,17 +367,20 @@ send(Step, _Req) ->
 %% Public Confirms
 %% ===================================================================
 
-headers_and_routing_key(publish, GtwId) ->
+headers_and_routing_key(?PUBLISH_TYPE, GtwId) ->
     {ok, SmsReqQueue} = application:get_env(?APP, kelly_sms_request_queue),
     {ok, GtwQueueFmt} = application:get_env(?APP, just_gateway_queue_fmt),
     GtwQueue = binary:replace(GtwQueueFmt, <<"%id%">>, GtwId),
     %% use rabbitMQ 'CC' extention to avoid
     %% doubling publish confirm per 1 request
     CC = {<<"CC">>, array, [{longstr, GtwQueue}]},
-    {[CC], SmsReqQueue};
-headers_and_routing_key(publish_deferred, _GtwId) ->
+    {[CC], SmsReqQueue, <<"SmsReqV1z">>};
+headers_and_routing_key(?PUBLISH_BLACKLISTED_TYPE, _GtwId) ->
+    {ok, RoutingKey} = application:get_env(?APP, kelly_sms_request_blacklisted_queue),
+    {[], RoutingKey, <<"BlacklistedV1z">>};
+headers_and_routing_key(?PUBLISH_DEFERRED_TYPE, _GtwId) ->
     {ok, SmsReqDefQueue} = application:get_env(?APP, kelly_sms_request_deferred_queue),
-    {[], SmsReqDefQueue}.
+    {[], SmsReqDefQueue, <<"SmsReqV1z">>}.
 
 handle_confirm(#'basic.ack'{delivery_tag = DTag, multiple = false}) ->
     reply_to(DTag, ok);
@@ -359,9 +428,30 @@ setup_chan(St = #st{}) ->
             amqp_channel:register_confirm_handler(Channel, self()),
             #'confirm.select_ok'{} = amqp_channel:call(Channel, #'confirm.select'{}),
             ok = rmql:queue_declare(Channel, SmsRequestQueue, []),
+            ok = setup_kelly_sms_request_blacklisted_queue(Channel),
             {ok, St#st{chan = Channel, chan_mon_ref = ChanMonRef}};
         unavailable -> unavailable
     end.
+
+-spec setup_kelly_sms_request_blacklisted_queue() -> ok.
+setup_kelly_sms_request_blacklisted_queue() ->
+    try
+        case rmql:channel_open() of
+            {ok, Channel} ->
+                setup_kelly_sms_request_blacklisted_queue(Channel),
+                ?log_info("Create sms request blacklisted queue (OK)", []),
+                ok;
+            _ -> ok
+        end
+    catch _:Error ->
+        ?log_warn("Fail to create sms request blacklisted queue (~p)", [Error]),
+        ok
+    end.
+
+setup_kelly_sms_request_blacklisted_queue(Channel) ->
+    {ok, SmsRequestBlacklistedQueue} =
+        application:get_env(?APP, kelly_sms_request_blacklisted_queue),
+    ok = rmql:queue_declare(Channel, SmsRequestBlacklistedQueue, []).
 
 build_req_dto(ReqId, GatewayId, AddrNetIdPrices, Req)
         when Req#send_req.req_type =:= single ->

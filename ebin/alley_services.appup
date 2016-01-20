@@ -1,19 +1,28 @@
-{"2.13.1",
+{"2.14.0",
     %% upgrade
     [{"2.12.0", [
-        {load_module, alley_services_mt},
-        {load_module, alley_services_coverage}
+        {load_module, alley_services_mt, [adto]},
+        {load_module, alley_services_coverage},
+        {apply, {alley_services_mt, setup_kelly_sms_request_blacklisted_queue, []}}
     ]},
     {"2.12.1", [
-        {load_module, alley_services_mt}
+        {load_module, alley_services_mt, [adto]},
+        {apply, {alley_services_mt, setup_kelly_sms_request_blacklisted_queue, []}}
+    ]},
+    {"2.13.1", [
+        {load_module, alley_services_mt, [adto]},
+        {apply, {alley_services_mt, setup_kelly_sms_request_blacklisted_queue, []}}
     ]}],
 
     %% downgrade
     [{"2.12.0", [
-        {load_module, alley_services_mt},
+        {load_module, alley_services_mt, [adto]},
         {load_module, alley_services_coverage}
     ]},
     {"2.12.1", [
-        {load_module, alley_services_mt}
+        {load_module, alley_services_mt, [adto]}
+    ]},
+    {"2.13.1", [
+        {load_module, alley_services_mt, [adto]}
     ]}]
 }.

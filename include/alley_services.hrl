@@ -7,6 +7,12 @@
 -type provider_id() :: uuid().
 -type gateway_id()  :: uuid().
 
+-define(BLACKLISTED_REJECT_REASON, blacklisted).
+-define(OTHER_REJECT_REASON, other).
+-type reject_reason() ::
+    ?BLACKLISTED_REJECT_REASON |
+    ?OTHER_REJECT_REASON.
+
 -record(send_req, {
     customer      :: customer(),
     customer_uuid :: uuid(),
@@ -35,7 +41,7 @@
     providers     :: [#provider_v1{}],
 
     routable      :: [{provider_id() | gateway_id(), [#addr{}]}],
-    rejected      :: [#addr{}],
+    rejected      :: [{reject_reason(), addr()}],
     req_dto_s     :: [#sms_req_v1{}],
 
     credit_left   :: float()
